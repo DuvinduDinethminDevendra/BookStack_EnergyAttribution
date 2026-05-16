@@ -93,7 +93,7 @@ jobs:
             -v "${PWD}:/app" -w /app \
             --platform linux/arm64 \
             composer:2 \
-            composer install --no-interaction --prefer-dist --no-scripts
+            composer install --no-interaction --prefer-dist --no-scripts --ignore-platform-reqs
           END_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
 
           sleep 10
