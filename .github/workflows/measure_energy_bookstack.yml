@@ -34,7 +34,7 @@ jobs:
           Copy-Item .env.example .env
           (Get-Content .env) `
             -replace 'APP_KEY=SomeRandomString', 'APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' `
-            -replace 'DB_HOST=localhost', 'DB_HOST=127.0.0.1' `
+            -replace 'DB_HOST=localhost', 'DB_HOST=db' `
             -replace 'DB_DATABASE=database_database', 'DB_DATABASE=bookstack-dev' `
             -replace 'DB_USERNAME=database_username', 'DB_USERNAME=bookstack-test' `
             -replace 'DB_PASSWORD=database_user_password', 'DB_PASSWORD=bookstack-test' `
