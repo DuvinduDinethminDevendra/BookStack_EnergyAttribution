@@ -1,0 +1,201 @@
+name: BookStack Energy Profiling (Mac M2 macOS)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  profile-energy:
+    runs-on: [self-hosted, macos]
+    permissions:
+      contents: write
+
+    env:
+      PROJECT_NAME: "bookstack"
+      RUN_ID: "mac_${{ github.run_id }}"
+      DATA_DIR: "${{ github.workspace }}/ResearchData/cpudata/mac_${{ github.run_id }}"
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare Directory Structure
+        run: |
+          mkdir -p "$DATA_DIR/Idle"
+          mkdir -p "$DATA_DIR/Composer_Install"
+          mkdir -p "$DATA_DIR/DB_Migration"
+          mkdir -p "$DATA_DIR/PHPUnit_Tests"
+        shell: bash
+
+      # --- INFRASTRUCTURE: Start MySQL (not profiled) ---
+      - name: Create .env and Start MySQL
+        run: |
+          cp .env.example .env
+          sed -i '' 's|APP_KEY=SomeRandomString|APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=|' .env
+          sed -i '' 's|DB_HOST=localhost|DB_HOST=127.0.0.1|' .env
+          sed -i '' 's|DB_DATABASE=database_database|DB_DATABASE=bookstack-dev|' .env
+          sed -i '' 's|DB_USERNAME=database_username|DB_USERNAME=bookstack-test|' .env
+          sed -i '' 's|DB_PASSWORD=database_user_password|DB_PASSWORD=bookstack-test|' .env
+          sed -i '' 's|APP_URL=https://example.com|APP_URL=http://localhost:8080|' .env
+          docker compose up -d db
+          docker compose build app
+          echo "Waiting 20 seconds for MySQL to initialize..."
+          sleep 20
+        shell: bash
+
+      # --- SCENARIO 1: IDLE (BASELINE) ---
+      - name: Profile Idle Scenario
+        run: |
+          W3C_TRACEPARENT="00-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-16)-01"
+          echo "Generated Trace-ID: $W3C_TRACEPARENT"
+          echo "Starting powermetrics in background (100ms interval, 60s max)..."
+          sudo powermetrics \
+            --samplers cpu_power \
+            -i 100 \
+            -n 600 \
+            > "$DATA_DIR/Idle/power_data.txt" 2>/dev/null &
+          PROF_PID=$!
+
+          echo "Capturing 10-second pre-execution baseline..."
+          sleep 10
+
+          echo "Idle baseline measurement..."
+          START_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+          sleep 30
+          END_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+
+          echo "Capturing 10-second post-execution cooldown..."
+          sleep 10
+
+          echo "Stopping powermetrics..."
+          sudo kill $PROF_PID 2>/dev/null || true
+          wait $PROF_PID 2>/dev/null || true
+
+          echo "Idle_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/Idle/timestamps.csv"
+          echo "Idle_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/Idle/timestamps.csv"
+        shell: bash
+
+      # --- SCENARIO 2: COMPOSER INSTALL ---
+      - name: Profile Composer Install
+        run: |
+          W3C_TRACEPARENT="00-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-16)-01"
+          sudo powermetrics \
+            --samplers cpu_power \
+            -i 100 \
+            -n 1800 \
+            > "$DATA_DIR/Composer_Install/power_data.txt" 2>/dev/null &
+          PROF_PID=$!
+          sleep 10
+
+          START_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+          docker run --rm \
+            -v "${PWD}:/app" -w /app \
+            --platform linux/arm64 \
+            composer:2 \
+            composer install --no-interaction --prefer-dist --no-scripts
+          END_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+
+          sleep 10
+          sudo kill $PROF_PID 2>/dev/null || true
+          wait $PROF_PID 2>/dev/null || true
+
+          echo "Composer_Install_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/Composer_Install/timestamps.csv"
+          echo "Composer_Install_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/Composer_Install/timestamps.csv"
+        shell: bash
+
+      # --- SCENARIO 3: DATABASE MIGRATION ---
+      - name: Profile Database Migration
+        run: |
+          W3C_TRACEPARENT="00-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-16)-01"
+          sudo powermetrics \
+            --samplers cpu_power \
+            -i 100 \
+            -n 600 \
+            > "$DATA_DIR/DB_Migration/power_data.txt" 2>/dev/null &
+          PROF_PID=$!
+          sleep 10
+
+          START_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+          docker compose exec -T app php artisan migrate --force --no-interaction
+          END_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+
+          sleep 10
+          sudo kill $PROF_PID 2>/dev/null || true
+          wait $PROF_PID 2>/dev/null || true
+
+          echo "DB_Migration_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/DB_Migration/timestamps.csv"
+          echo "DB_Migration_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/DB_Migration/timestamps.csv"
+        shell: bash
+
+      # --- SCENARIO 4: PHPUNIT TEST SUITE ---
+      - name: Profile PHPUnit Test Suite
+        run: |
+          W3C_TRACEPARENT="00-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-16)-01"
+
+          # Prepare the test database (not profiled)
+          docker compose exec -T app php artisan migrate:fresh --database=mysql_testing --force --no-interaction
+
+          sudo powermetrics \
+            --samplers cpu_power \
+            -i 100 \
+            -n 3000 \
+            > "$DATA_DIR/PHPUnit_Tests/power_data.txt" 2>/dev/null &
+          PROF_PID=$!
+          sleep 10
+
+          START_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+          docker compose exec -T app php artisan test --no-interaction
+          END_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+
+          sleep 10
+          sudo kill $PROF_PID 2>/dev/null || true
+          wait $PROF_PID 2>/dev/null || true
+
+          echo "PHPUnit_Tests_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/PHPUnit_Tests/timestamps.csv"
+          echo "PHPUnit_Tests_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/PHPUnit_Tests/timestamps.csv"
+        shell: bash
+
+      # --- CONVERT: powermetrics → AMD-compatible timechart.csv ---
+      - name: Convert powermetrics to timechart.csv
+        run: |
+          echo "Converting powermetrics output to AMD-compatible timechart.csv..."
+          python3 scripts/parse_powermetrics.py "$RUN_ID"
+        shell: bash
+
+      # --- TEARDOWN ---
+      - name: Teardown Docker Environment
+        if: always()
+        run: docker compose down -v
+        shell: bash
+
+      - name: Upload Traces as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: energy-traces-${{ env.RUN_ID }}
+          path: ${{ env.DATA_DIR }}
+          retention-days: 90
+
+      - name: Offload to MinIO Bucket
+        env:
+          AWS_ACCESS_KEY_ID: researcher
+          AWS_SECRET_ACCESS_KEY: supersecretpassword
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          echo "Compressing Raw Telemetry..."
+          cd "$DATA_DIR/Idle"             && zip -j "$DATA_DIR/Idle.zip"             timechart.csv timestamps.csv && cd -
+          cd "$DATA_DIR/Composer_Install" && zip -j "$DATA_DIR/Composer_Install.zip" timechart.csv timestamps.csv && cd -
+          cd "$DATA_DIR/DB_Migration"     && zip -j "$DATA_DIR/DB_Migration.zip"     timechart.csv timestamps.csv && cd -
+          cd "$DATA_DIR/PHPUnit_Tests"    && zip -j "$DATA_DIR/PHPUnit_Tests.zip"    timechart.csv timestamps.csv && cd -
+
+          echo "Uploading to MinIO Cloud (bookstack project)..."
+          docker run --rm -v "$DATA_DIR:/data" --entrypoint sh minio/mc -c "\
+            mc alias set myminio http://100.67.86.32:9000 researcher supersecretpassword && \
+            mc cp /data/Idle.zip             myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/Idle.zip && \
+            mc cp /data/Composer_Install.zip myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/Composer_Install.zip && \
+            mc cp /data/DB_Migration.zip     myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/DB_Migration.zip && \
+            mc cp /data/PHPUnit_Tests.zip    myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/PHPUnit_Tests.zip"
+
+          echo "Cleaning up local disk..."
+          rm -rf "$DATA_DIR"
+        shell: bash
