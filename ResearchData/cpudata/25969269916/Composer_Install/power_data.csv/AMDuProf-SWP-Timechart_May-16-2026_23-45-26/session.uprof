@@ -1,0 +1,360 @@
+{
+    "auxiliary": {
+        "availablePages": "1338 MB",
+        "availableRam": "340 MB",
+        "availableVirtualMemory": "134213461 MB",
+        "cores": 12,
+        "cpuAgentCount": 0,
+        "cpuFamily": 25,
+        "cpuModel": 68,
+        "cpuModelName": "AMD Ryzen 5 7535HS with Radeon Graphics",
+        "cpuTopology": [
+            [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                2,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                3,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                4,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                5,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                6,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                7,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                8,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                9,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                10,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                11,
+                0,
+                0,
+                0,
+                0
+            ]
+        ],
+        "guest": false,
+        "guestKallsyms": "",
+        "guestKmodules": "",
+        "guestPid": 602406912,
+        "guestSymPaths": "",
+        "host": false,
+        "hypervisorEnabled": true,
+        "hypervisorVendor": "",
+        "ibsIdentifiers": 636562464,
+        "ibsOpSampling": false,
+        "isCacheline": false,
+        "isFreqMode": false,
+        "issmtEnabled": true,
+        "onlineCores": 12,
+        "osName": "Win1125H2-64",
+        "p0Freq": 0,
+        "profScope": "Single Application",
+        "profiledPids": "",
+        "totalPages": "64284 MB",
+        "totalRam": "23880 MB",
+        "totalVirtualMemory": "134217727 MB"
+    },
+    "categoriesCollected": [
+        "livePower"
+    ],
+    "collectCommand": "",
+    "collection": {
+        "branch-filter": 511,
+        "callstack": {
+            "callstackSize": 0,
+            "fpo": false,
+            "interval": 0,
+            "scope": 0,
+            "unwindDepth": 0
+        },
+        "customProfileEventMap": {
+            "keys": null,
+            "values": null
+        },
+        "dataBufferCount": 0,
+        "events": {
+            "configName": "",
+            "configType": 0,
+            "cpuTraceSourceMask": 0,
+            "ibsEvents": {
+                "cacheAnalysis": false,
+                "fetch": false,
+                "fetchCallstack": true,
+                "fetchInterval": 0,
+                "fetchL3Miss": false,
+                "loadStoreOnly": false,
+                "op": false,
+                "opCallstack": true,
+                "opCycleCount": false,
+                "opInterval": 0,
+                "opL3Miss": false,
+                "opLoadLatency": 0,
+                "randomize": true
+            },
+            "pmcEvents": null,
+            "predefinedProfileType": 4,
+            "samplingModeMask": 0
+        },
+        "flags": {
+            "collectSysModules": false,
+            "cssDefaultValues": false,
+            "defaultBranchAnalysis": false,
+            "hasCallstack": false,
+            "isThreadConcurrency": false,
+            "maxDataFileSize": 0,
+            "perEventCSSDefault": false,
+            "profileMpi": false,
+            "profileSamplinModeBpf": false,
+            "pythonTraceOptions": false,
+            "traceMpi": false,
+            "traceMpiMode": 0,
+            "traceOpenmp": false,
+            "traceOpenmpMode": 0,
+            "traceOpenmpType": 0
+        },
+        "globalFrequency": 0,
+        "globalSamplingInterval": 100,
+        "hostP0Freqs": [
+            {
+                "host": "Duvindu",
+                "p0Freq": 3301.0
+            }
+        ],
+        "hotspotsProfilingSignal": -1,
+        "lbr": false,
+        "livePower": {
+            "counterList": [
+                {
+                    "category": "Power",
+                    "categoryId": 0,
+                    "counterId": 36,
+                    "name": "Socket0 Package Power",
+                    "unit": 6
+                },
+                {
+                    "category": "Power",
+                    "categoryId": 0,
+                    "counterId": 38,
+                    "name": "Core0 Power",
+                    "unit": 6
+                },
+                {
+                    "category": "Power",
+                    "categoryId": 0,
+                    "counterId": 40,
+                    "name": "Core1 Power",
+                    "unit": 6
+                },
+                {
+                    "category": "Power",
+                    "categoryId": 0,
+                    "counterId": 42,
+                    "name": "Core2 Power",
+                    "unit": 6
+                },
+                {
+                    "category": "Power",
+                    "categoryId": 0,
+                    "counterId": 44,
+                    "name": "Core3 Power",
+                    "unit": 6
+                },
+                {
+                    "category": "Power",
+                    "categoryId": 0,
+                    "counterId": 46,
+                    "name": "Core4 Power",
+                    "unit": 6
+                },
+                {
+                    "category": "Power",
+                    "categoryId": 0,
+                    "counterId": 48,
+                    "name": "Core5 Power",
+                    "unit": 6
+                }
+            ]
+        },
+        "metadataSource": 0,
+        "mmapBuffer": 0,
+        "profileChildren": true,
+        "schedule": {
+            "elapsed": 0,
+            "end": 0,
+            "endTs": "",
+            "profileCollectionDataLimitType": 0,
+            "profileDuration": 180,
+            "start": 0,
+            "startDelay": 0,
+            "startTs": "",
+            "type": 1
+        },
+        "sessionVersion": 9,
+        "target": {
+            "appArgs": "",
+            "coreAffinity": "0",
+            "coreMask": "0",
+            "gpuCollectAgentVersion": 0,
+            "gpuFamily": "",
+            "gpuRocprofVersion": 0,
+            "launchApp": "",
+            "profileCores": false,
+            "systemWide": true,
+            "terminateApp": false,
+            "workingDir": "C:\\Users\\ROSHAN\\actions-runner\\actions-runner\\_work\\BookStack_EnergyAttribution\\BookStack_EnergyAttribution"
+        }
+    },
+    "deviceInfo": {
+        "keys": [
+            0
+        ],
+        "values": [
+            {
+                "keys": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    6,
+                    7,
+                    8,
+                    9,
+                    10,
+                    11
+                ],
+                "values": [
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ],
+                    [
+                        0,
+                        3301000000
+                    ]
+                ]
+            }
+        ]
+    },
+    "hpc": {
+        "hostName": "Duvindu"
+    },
+    "profileType": 64,
+    "reportCommand": "",
+    "translateCommand": ""
+}

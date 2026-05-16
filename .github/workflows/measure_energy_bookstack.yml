@@ -80,7 +80,7 @@ jobs:
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-          docker run --rm -v "${PWD}:/app" -w /app composer:2 composer install --no-interaction --prefer-dist --no-scripts --ignore-platform-reqs
+          docker run --rm -v "${PWD}:/app" -w /app -e COMPOSER_PROCESS_TIMEOUT=600 composer:2 composer install --no-interaction --prefer-dist --no-scripts --ignore-platform-reqs
           $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
 
           Start-Sleep -Seconds 10
