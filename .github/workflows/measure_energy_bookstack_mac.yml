@@ -171,6 +171,7 @@ jobs:
         shell: bash
 
       - name: Upload Traces as Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: energy-traces-${{ env.RUN_ID }}
@@ -178,6 +179,7 @@ jobs:
           retention-days: 90
 
       - name: Offload to MinIO Bucket
+        if: always()
         env:
           AWS_ACCESS_KEY_ID: researcher
           AWS_SECRET_ACCESS_KEY: supersecretpassword
