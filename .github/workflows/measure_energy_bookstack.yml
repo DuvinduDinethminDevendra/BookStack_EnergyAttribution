@@ -120,7 +120,7 @@ jobs:
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-          docker compose run --rm --entrypoint php app artisan test --no-interaction
+          docker compose run --rm --entrypoint php app artisan test
           $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
 
           Start-Sleep -Seconds 10

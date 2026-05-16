@@ -145,7 +145,7 @@ jobs:
           sleep 10
 
           START_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
-          docker compose run --rm --entrypoint php app artisan test --no-interaction
+          docker compose run --rm --entrypoint php app artisan test
           END_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
 
           sleep 10
