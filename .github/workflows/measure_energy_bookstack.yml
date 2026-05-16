@@ -98,7 +98,7 @@ jobs:
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-          docker compose run --rm app php artisan migrate --force --no-interaction
+          docker compose run --rm --entrypoint php app artisan migrate --force --no-interaction
           $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
 
           Start-Sleep -Seconds 10
@@ -114,13 +114,13 @@ jobs:
           $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
 
           # Prepare test database (not profiled)
-          docker compose run --rm app php artisan migrate:fresh --database=mysql_testing --force --no-interaction
+          docker compose run --rm --entrypoint php app artisan migrate:fresh --database=mysql_testing --force --no-interaction
 
           $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 300 -o `"$env:DATA_DIR\PHPUnit_Tests\power_data.csv`"" -PassThru -NoNewWindow
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-          docker compose run --rm app php artisan test --no-interaction
+          docker compose run --rm --entrypoint php app artisan test --no-interaction
           $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
 
           Start-Sleep -Seconds 10
