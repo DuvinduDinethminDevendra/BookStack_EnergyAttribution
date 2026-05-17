@@ -1,10 +1,177 @@
-name: BookStack Energy Profiling (Mac M2 macOS)
+name: BookStack Energy Profiling (Combined Windows & Mac)
 
 on:
   workflow_dispatch:
 
 jobs:
-  profile-energy:
+  profile-windows:
+    name: Profile AMD Windows
+    runs-on: [self-hosted, Windows]
+    permissions:
+      contents: write
+
+    env:
+      PROJECT_NAME: "bookstack"
+      RUN_ID: "win_${{ github.run_id }}"
+      DATA_DIR: "D:\\myPortfolioProject\\BookStack_EnergyAttribution\\ResearchData\\cpudata\\win_${{ github.run_id }}"
+      UPROF_PATH: "C:\\Program Files\\AMD\\AMDuProf\\bin\\AMDuProfCLI.exe"
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Prepare Directory Structure
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:DATA_DIR\Idle"
+          New-Item -ItemType Directory -Force -Path "$env:DATA_DIR\Composer_Install"
+          New-Item -ItemType Directory -Force -Path "$env:DATA_DIR\DB_Migration"
+          New-Item -ItemType Directory -Force -Path "$env:DATA_DIR\PHPUnit_Tests"
+        shell: powershell
+
+      # --- INFRASTRUCTURE: Start MySQL (not profiled) ---
+      - name: Create .env and Start MySQL
+        run: |
+          Copy-Item .env.example .env
+          (Get-Content .env) `
+            -replace 'APP_KEY=SomeRandomString', 'APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' `
+            -replace 'DB_HOST=localhost', 'DB_HOST=db' `
+            -replace 'DB_DATABASE=database_database', 'DB_DATABASE=bookstack-dev' `
+            -replace 'DB_USERNAME=database_username', 'DB_USERNAME=bookstack-test' `
+            -replace 'DB_PASSWORD=database_user_password', 'DB_PASSWORD=bookstack-test' `
+            -replace 'APP_URL=https://example.com', 'APP_URL=http://localhost:8080' |
+          Set-Content .env
+          docker compose up -d db
+          docker compose build app
+          Write-Host "Waiting 20 seconds for MySQL to initialize..."
+          Start-Sleep -Seconds 20
+        shell: powershell
+
+      # --- SCENARIO 1: IDLE (BASELINE) ---
+      - name: Profile Idle Scenario
+        run: |
+          $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
+          echo "Generated Trace-ID: $w3cTraceparent"
+          echo "Starting AMD uProf in background (100ms polling)..."
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 60 -o `"$env:DATA_DIR\Idle\power_data.csv`"" -PassThru -WindowStyle Hidden
+
+          echo "Capturing 10-second pre-execution baseline..."
+          Start-Sleep -Seconds 10
+
+          echo "Idle baseline measurement..."
+          $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+          Start-Sleep -Seconds 30
+          $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+
+          echo "Capturing 10-second post-execution cooldown..."
+          Start-Sleep -Seconds 10
+
+          echo "Stopping AMD uProf..."
+          Stop-Process -Id $uprof.Id -Force -ErrorAction SilentlyContinue
+
+          echo "Idle_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\Idle\timestamps.csv"
+          echo "Idle_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\Idle\timestamps.csv"
+        shell: powershell
+
+      # --- SCENARIO 2: COMPOSER INSTALL ---
+      - name: Profile Composer Install
+        run: |
+          $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 180 -o `"$env:DATA_DIR\Composer_Install\power_data.csv`"" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 10
+
+          $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+          docker run --rm -v "${PWD}:/app" -w /app -e COMPOSER_PROCESS_TIMEOUT=600 composer:2 composer install --no-interaction --prefer-dist --no-scripts --ignore-platform-reqs ; $global:LASTEXITCODE = 0
+          $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+
+          Start-Sleep -Seconds 10
+          Stop-Process -Id $uprof.Id -Force -ErrorAction SilentlyContinue
+
+          echo "Composer_Install_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\Composer_Install\timestamps.csv"
+          echo "Composer_Install_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\Composer_Install\timestamps.csv"
+        shell: powershell
+
+      # --- SCENARIO 3: DATABASE MIGRATION ---
+      - name: Profile Database Migration
+        run: |
+          $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 60 -o `"$env:DATA_DIR\DB_Migration\power_data.csv`"" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 10
+
+          $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+          docker compose run --rm --entrypoint php app artisan migrate --force --no-interaction ; $global:LASTEXITCODE = 0
+          $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+
+          Start-Sleep -Seconds 10
+          Stop-Process -Id $uprof.Id -Force -ErrorAction SilentlyContinue
+
+          echo "DB_Migration_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\DB_Migration\timestamps.csv"
+          echo "DB_Migration_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\DB_Migration\timestamps.csv"
+        shell: powershell
+
+      # --- SCENARIO 4: PHPUNIT TEST SUITE ---
+      - name: Profile PHPUnit Test Suite
+        run: |
+          $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
+
+          # Prepare test database (not profiled)
+          docker compose run --rm --entrypoint php app artisan migrate:fresh --database=mysql_testing --force --no-interaction ; $global:LASTEXITCODE = 0
+
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 300 -o `"$env:DATA_DIR\PHPUnit_Tests\power_data.csv`"" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 10
+
+          $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+          docker compose run --rm --entrypoint php app artisan test ; $global:LASTEXITCODE = 0
+          $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+
+          Start-Sleep -Seconds 10
+          Stop-Process -Id $uprof.Id -Force -ErrorAction SilentlyContinue
+
+          echo "PHPUnit_Tests_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\PHPUnit_Tests\timestamps.csv"
+          echo "PHPUnit_Tests_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\PHPUnit_Tests\timestamps.csv"
+        shell: powershell
+
+      # --- TEARDOWN ---
+      - name: Teardown Docker Environment
+        if: always()
+        run: docker compose down -v
+        shell: powershell
+
+      - name: Upload Traces as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: energy-traces-${{ env.RUN_ID }}
+          path: ${{ env.DATA_DIR }}
+          retention-days: 90
+
+      - name: Offload to MinIO Bucket
+        if: always()
+        env:
+          AWS_ACCESS_KEY_ID: researcher
+          AWS_SECRET_ACCESS_KEY: supersecretpassword
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          Write-Host "Compressing Raw Telemetry..."
+          Compress-Archive -Path "$env:DATA_DIR\Idle\*"             -DestinationPath "$env:DATA_DIR\Idle.zip"             -Force
+          Compress-Archive -Path "$env:DATA_DIR\Composer_Install\*" -DestinationPath "$env:DATA_DIR\Composer_Install.zip" -Force
+          Compress-Archive -Path "$env:DATA_DIR\DB_Migration\*"     -DestinationPath "$env:DATA_DIR\DB_Migration.zip"     -Force
+          Compress-Archive -Path "$env:DATA_DIR\PHPUnit_Tests\*"    -DestinationPath "$env:DATA_DIR\PHPUnit_Tests.zip"    -Force
+
+          Write-Host "Uploading to MinIO Cloud (bookstack project)..."
+          $awsExe = "C:\Program Files\Amazon\AWSCLIV2\aws.exe"
+          & $awsExe s3 cp "$env:DATA_DIR\Idle.zip"             "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/Idle.zip"             --endpoint-url http://100.67.86.32:9000
+          & $awsExe s3 cp "$env:DATA_DIR\Composer_Install.zip" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/Composer_Install.zip" --endpoint-url http://100.67.86.32:9000
+          & $awsExe s3 cp "$env:DATA_DIR\DB_Migration.zip"     "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/DB_Migration.zip"     --endpoint-url http://100.67.86.32:9000
+          & $awsExe s3 cp "$env:DATA_DIR\PHPUnit_Tests.zip"    "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/PHPUnit_Tests.zip"    --endpoint-url http://100.67.86.32:9000
+
+          Write-Host "Cleaning up local disk..."
+          Remove-Item -Path "$env:DATA_DIR" -Recurse -Force
+        shell: powershell
+
+  profile-mac:
+    name: Profile Apple Mac M2
     runs-on: [self-hosted, macos]
     permissions:
       contents: write
