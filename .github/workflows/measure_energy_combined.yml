@@ -51,47 +51,15 @@ jobs:
       - name: Define Windows UTF-8 JSON Writer
         run: |
           function Write-Utf8JsonNoBom($Path, $Value) {
-            $json = $Value | ConvertTo-Json -Compress -Depth 8
+            $json = $Value | ConvertTo-Json -Compress
             $encoding = New-Object System.Text.UTF8Encoding($false)
             [System.IO.File]::WriteAllText($Path, $json, $encoding)
-          }
-          function Write-SyntheticSpan($Path, $Scenario, $StartTime, $EndTime, $Traceparent) {
-            $start = [datetime]::ParseExact($StartTime, "yyyy-MM-dd HH:mm:ss.fff", $null)
-            $end = [datetime]::ParseExact($EndTime, "yyyy-MM-dd HH:mm:ss.fff", $null)
-            $parts = $Traceparent.Split("-")
-            $spanId = if ($parts.Length -ge 3) { $parts[2] } else { "unknown" }
-            $payload = @{
-              spans = @(@{
-                span_id = $spanId
-                name = "$Scenario.Execution"
-                start_time = $StartTime
-                end_time = $EndTime
-                duration_ms = [math]::Round(($end - $start).TotalMilliseconds, 3)
-              })
-            }
-            Write-Utf8JsonNoBom $Path $payload
           }
           @'
           function Write-Utf8JsonNoBom($Path, $Value) {
-            $json = $Value | ConvertTo-Json -Compress -Depth 8
+            $json = $Value | ConvertTo-Json -Compress
             $encoding = New-Object System.Text.UTF8Encoding($false)
             [System.IO.File]::WriteAllText($Path, $json, $encoding)
-          }
-          function Write-SyntheticSpan($Path, $Scenario, $StartTime, $EndTime, $Traceparent) {
-            $start = [datetime]::ParseExact($StartTime, "yyyy-MM-dd HH:mm:ss.fff", $null)
-            $end = [datetime]::ParseExact($EndTime, "yyyy-MM-dd HH:mm:ss.fff", $null)
-            $parts = $Traceparent.Split("-")
-            $spanId = if ($parts.Length -ge 3) { $parts[2] } else { "unknown" }
-            $payload = @{
-              spans = @(@{
-                span_id = $spanId
-                name = "$Scenario.Execution"
-                start_time = $StartTime
-                end_time = $EndTime
-                duration_ms = [math]::Round(($end - $start).TotalMilliseconds, 3)
-              })
-            }
-            Write-Utf8JsonNoBom $Path $payload
           }
           '@ | Out-File -FilePath "$env:DATA_DIR\write-json.ps1" -Encoding ascii
         shell: powershell
@@ -138,8 +106,6 @@ jobs:
 
           echo "Idle_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\Idle\timestamps.csv"
           echo "Idle_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\Idle\timestamps.csv"
-          . "$env:DATA_DIR\write-json.ps1"
-          Write-SyntheticSpan "$env:DATA_DIR\Idle\spans.json" "Idle" $startTime $endTime $w3cTraceparent
         shell: powershell
 
       # --- SCENARIO 2: COMPOSER INSTALL ---
@@ -159,8 +125,6 @@ jobs:
 
           echo "Composer_Install_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\Composer_Install\timestamps.csv"
           echo "Composer_Install_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\Composer_Install\timestamps.csv"
-          . "$env:DATA_DIR\write-json.ps1"
-          Write-SyntheticSpan "$env:DATA_DIR\Composer_Install\spans.json" "Composer_Install" $startTime $endTime $w3cTraceparent
 
           # Duration overflow guard
           $actualSec = ((Get-Date $endTime) - (Get-Date $startTime)).TotalSeconds
@@ -191,8 +155,6 @@ jobs:
 
           echo "DB_Migration_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\DB_Migration\timestamps.csv"
           echo "DB_Migration_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\DB_Migration\timestamps.csv"
-          . "$env:DATA_DIR\write-json.ps1"
-          Write-SyntheticSpan "$env:DATA_DIR\DB_Migration\spans.json" "DB_Migration" $startTime $endTime $w3cTraceparent
 
           # Duration overflow guard
           $actualSec = ((Get-Date $endTime) - (Get-Date $startTime)).TotalSeconds
@@ -227,8 +189,6 @@ jobs:
 
           echo "PHPUnit_Tests_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\PHPUnit_Tests\timestamps.csv"
           echo "PHPUnit_Tests_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\PHPUnit_Tests\timestamps.csv"
-          . "$env:DATA_DIR\write-json.ps1"
-          Write-SyntheticSpan "$env:DATA_DIR\PHPUnit_Tests\spans.json" "PHPUnit_Tests" $startTime $endTime $w3cTraceparent
 
           # Duration overflow guard
           $actualSec = ((Get-Date $endTime) - (Get-Date $startTime)).TotalSeconds
@@ -268,7 +228,6 @@ jobs:
             $scenarioDir = Join-Path $env:DATA_DIR $scenario
             $rootTimechart = Join-Path $scenarioDir "timechart.csv"
             $timestamps = Join-Path $scenarioDir "timestamps.csv"
-            $spans = Join-Path $scenarioDir "spans.json"
 
             if (-not (Test-Path -LiteralPath $rootTimechart)) {
               $nestedTimechart = Get-ChildItem -LiteralPath $scenarioDir -Recurse -Filter "timechart.csv" -File |
@@ -282,7 +241,7 @@ jobs:
               Copy-Item -LiteralPath $nestedTimechart.FullName -Destination $rootTimechart -Force
             }
 
-            foreach ($requiredFile in @($rootTimechart, $timestamps, $spans)) {
+            foreach ($requiredFile in @($rootTimechart, $timestamps)) {
               if (-not (Test-Path -LiteralPath $requiredFile)) {
                 throw "Missing required telemetry file: $requiredFile"
               }
@@ -291,7 +250,7 @@ jobs:
               }
             }
 
-            $files = @($rootTimechart, $timestamps, $spans)
+            $files = @($rootTimechart, $timestamps)
             $durationCheck = Join-Path $scenarioDir "duration_check.json"
             if (Test-Path -LiteralPath $durationCheck) {
               $files += $durationCheck
@@ -412,7 +371,6 @@ jobs:
 
           echo "Idle_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/Idle/timestamps.csv"
           echo "Idle_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/Idle/timestamps.csv"
-          python3 scripts/write_synthetic_span.py "$DATA_DIR/Idle/spans.json" "Idle" "$START_TIME" "$END_TIME" "$W3C_TRACEPARENT"
         shell: bash
 
       # --- SCENARIO 2: COMPOSER INSTALL ---
@@ -443,7 +401,6 @@ jobs:
 
           echo "Composer_Install_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/Composer_Install/timestamps.csv"
           echo "Composer_Install_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/Composer_Install/timestamps.csv"
-          python3 scripts/write_synthetic_span.py "$DATA_DIR/Composer_Install/spans.json" "Composer_Install" "$START_TIME" "$END_TIME" "$W3C_TRACEPARENT"
 
           # Duration overflow guard
           ACTUAL_SEC=$(python3 -c "from datetime import datetime; s=datetime.strptime('$START_TIME','%Y-%m-%d %H:%M:%S.%f'); e=datetime.strptime('$END_TIME','%Y-%m-%d %H:%M:%S.%f'); print(round((e-s).total_seconds(),2))")
@@ -479,7 +436,6 @@ jobs:
 
           echo "DB_Migration_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/DB_Migration/timestamps.csv"
           echo "DB_Migration_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/DB_Migration/timestamps.csv"
-          python3 scripts/write_synthetic_span.py "$DATA_DIR/DB_Migration/spans.json" "DB_Migration" "$START_TIME" "$END_TIME" "$W3C_TRACEPARENT"
 
           # Duration overflow guard
           ACTUAL_SEC=$(python3 -c "from datetime import datetime; s=datetime.strptime('$START_TIME','%Y-%m-%d %H:%M:%S.%f'); e=datetime.strptime('$END_TIME','%Y-%m-%d %H:%M:%S.%f'); print(round((e-s).total_seconds(),2))")
@@ -519,7 +475,6 @@ jobs:
 
           echo "PHPUnit_Tests_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/PHPUnit_Tests/timestamps.csv"
           echo "PHPUnit_Tests_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/PHPUnit_Tests/timestamps.csv"
-          python3 scripts/write_synthetic_span.py "$DATA_DIR/PHPUnit_Tests/spans.json" "PHPUnit_Tests" "$START_TIME" "$END_TIME" "$W3C_TRACEPARENT"
 
           # Duration overflow guard
           ACTUAL_SEC=$(python3 -c "from datetime import datetime; s=datetime.strptime('$START_TIME','%Y-%m-%d %H:%M:%S.%f'); e=datetime.strptime('$END_TIME','%Y-%m-%d %H:%M:%S.%f'); print(round((e-s).total_seconds(),2))")
@@ -549,7 +504,6 @@ jobs:
           for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests; do
             CSV="$DATA_DIR/$SCENARIO/timechart.csv"
             TS="$DATA_DIR/$SCENARIO/timestamps.csv"
-            SPANS="$DATA_DIR/$SCENARIO/spans.json"
             if [ ! -f "$CSV" ]; then
               echo "ERROR: MISSING: $CSV"
               FAIL=1
@@ -571,14 +525,6 @@ jobs:
               FAIL=1
             elif [ ! -s "$TS" ]; then
               echo "ERROR: EMPTY: $TS"
-              FAIL=1
-            fi
-
-            if [ ! -f "$SPANS" ]; then
-              echo "ERROR: MISSING: $SPANS"
-              FAIL=1
-            elif [ ! -s "$SPANS" ]; then
-              echo "ERROR: EMPTY: $SPANS"
               FAIL=1
             fi
           done
@@ -614,9 +560,9 @@ jobs:
           echo "Compressing Raw Telemetry..."
           for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests; do
             SCENARIO_DIR="$DATA_DIR/$SCENARIO"
-            FILES=("$SCENARIO_DIR/timechart.csv" "$SCENARIO_DIR/timestamps.csv" "$SCENARIO_DIR/spans.json")
+            FILES=("$SCENARIO_DIR/timechart.csv" "$SCENARIO_DIR/timestamps.csv")
 
-            for REQUIRED_FILE in "$SCENARIO_DIR/timechart.csv" "$SCENARIO_DIR/timestamps.csv" "$SCENARIO_DIR/spans.json"; do
+            for REQUIRED_FILE in "$SCENARIO_DIR/timechart.csv" "$SCENARIO_DIR/timestamps.csv"; do
               if [ ! -s "$REQUIRED_FILE" ]; then
                 echo "ERROR: Missing or empty required telemetry file: $REQUIRED_FILE"
                 exit 1
