@@ -30,6 +30,24 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$env:DATA_DIR\PHPUnit_Tests"
         shell: powershell
 
+      - name: Capture Hardware Metadata
+        run: |
+          $meta = @{
+            platform     = "amd_windows"
+            captured_at  = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+            cpu_model    = (Get-CimInstance Win32_Processor).Name
+            cpu_cores    = (Get-CimInstance Win32_Processor).NumberOfCores
+            cpu_threads  = (Get-CimInstance Win32_Processor).NumberOfLogicalProcessors
+            cpu_max_mhz  = (Get-CimInstance Win32_Processor).MaxClockSpeed
+            ram_gb       = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1)
+            os_version   = (Get-CimInstance Win32_OperatingSystem).Caption
+            docker_ver   = (docker --version)
+          }
+          $meta | ConvertTo-Json | Out-File -FilePath "$env:DATA_DIR\hardware_metadata.json" -Encoding utf8
+          Write-Host "Hardware metadata captured:"
+          $meta | ConvertTo-Json
+        shell: powershell
+
       # --- INFRASTRUCTURE: Start MySQL (not profiled) ---
       - name: Create .env and Start MySQL
         run: |
@@ -78,11 +96,12 @@ jobs:
       - name: Profile Composer Install
         run: |
           $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
-          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 180 -o `"$env:DATA_DIR\Composer_Install\power_data.csv`"" -PassThru -WindowStyle Hidden
+          $profilerCap = 900
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d $profilerCap -o `"$env:DATA_DIR\Composer_Install\power_data.csv`"" -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-          docker run --rm -v "${PWD}:/app" -w /app -e COMPOSER_PROCESS_TIMEOUT=600 composer:2 composer install --no-interaction --prefer-dist --no-scripts --ignore-platform-reqs ; $global:LASTEXITCODE = 0
+          docker run --rm -v "${PWD}:/app" -w /app --platform linux/amd64 -e COMPOSER_PROCESS_TIMEOUT=600 composer:2 composer install --no-interaction --prefer-dist --no-scripts --ignore-platform-reqs ; $global:LASTEXITCODE = 0
           $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
 
           Start-Sleep -Seconds 10
@@ -90,13 +109,24 @@ jobs:
 
           echo "Composer_Install_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\Composer_Install\timestamps.csv"
           echo "Composer_Install_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\Composer_Install\timestamps.csv"
+
+          # Duration overflow guard
+          $actualSec = ((Get-Date $endTime) - (Get-Date $startTime)).TotalSeconds
+          $usableCap = $profilerCap - 20  # subtract baseline + cooldown
+          $truncated = $actualSec -gt $usableCap
+          @{ task_seconds = [math]::Round($actualSec,2); profiler_cap_seconds = $profilerCap; usable_cap_seconds = $usableCap; truncated = $truncated } | ConvertTo-Json | Out-File "$env:DATA_DIR\Composer_Install\duration_check.json" -Encoding utf8
+          if ($truncated) {
+            Write-Error "TRUNCATED DATA: Composer ran ${actualSec}s but profiler usable window was ${usableCap}s"
+            exit 1
+          }
         shell: powershell
 
       # --- SCENARIO 3: DATABASE MIGRATION ---
       - name: Profile Database Migration
         run: |
           $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
-          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 60 -o `"$env:DATA_DIR\DB_Migration\power_data.csv`"" -PassThru -WindowStyle Hidden
+          $profilerCap = 120
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d $profilerCap -o `"$env:DATA_DIR\DB_Migration\power_data.csv`"" -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
@@ -108,6 +138,16 @@ jobs:
 
           echo "DB_Migration_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\DB_Migration\timestamps.csv"
           echo "DB_Migration_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\DB_Migration\timestamps.csv"
+
+          # Duration overflow guard
+          $actualSec = ((Get-Date $endTime) - (Get-Date $startTime)).TotalSeconds
+          $usableCap = $profilerCap - 20
+          $truncated = $actualSec -gt $usableCap
+          @{ task_seconds = [math]::Round($actualSec,2); profiler_cap_seconds = $profilerCap; usable_cap_seconds = $usableCap; truncated = $truncated } | ConvertTo-Json | Out-File "$env:DATA_DIR\DB_Migration\duration_check.json" -Encoding utf8
+          if ($truncated) {
+            Write-Error "TRUNCATED DATA: Migration ran ${actualSec}s but profiler usable window was ${usableCap}s"
+            exit 1
+          }
         shell: powershell
 
       # --- SCENARIO 4: PHPUNIT TEST SUITE ---
@@ -118,7 +158,8 @@ jobs:
           # Prepare test database (not profiled)
           docker compose run --rm --entrypoint php app artisan migrate:fresh --database=mysql_testing --force --no-interaction ; $global:LASTEXITCODE = 0
 
-          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 300 -o `"$env:DATA_DIR\PHPUnit_Tests\power_data.csv`"" -PassThru -WindowStyle Hidden
+          $profilerCap = 1500
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d $profilerCap -o `"$env:DATA_DIR\PHPUnit_Tests\power_data.csv`"" -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
@@ -130,6 +171,16 @@ jobs:
 
           echo "PHPUnit_Tests_Start,$startTime,$w3cTraceparent" > "$env:DATA_DIR\PHPUnit_Tests\timestamps.csv"
           echo "PHPUnit_Tests_End,$endTime,$w3cTraceparent" >> "$env:DATA_DIR\PHPUnit_Tests\timestamps.csv"
+
+          # Duration overflow guard
+          $actualSec = ((Get-Date $endTime) - (Get-Date $startTime)).TotalSeconds
+          $usableCap = $profilerCap - 20
+          $truncated = $actualSec -gt $usableCap
+          @{ task_seconds = [math]::Round($actualSec,2); profiler_cap_seconds = $profilerCap; usable_cap_seconds = $usableCap; truncated = $truncated } | ConvertTo-Json | Out-File "$env:DATA_DIR\PHPUnit_Tests\duration_check.json" -Encoding utf8
+          if ($truncated) {
+            Write-Error "TRUNCATED DATA: PHPUnit ran ${actualSec}s but profiler usable window was ${usableCap}s"
+            exit 1
+          }
         shell: powershell
 
       # --- TEARDOWN ---
@@ -147,7 +198,6 @@ jobs:
           retention-days: 90
 
       - name: Offload to MinIO Bucket
-        if: always()
         env:
           AWS_ACCESS_KEY_ID: researcher
           AWS_SECRET_ACCESS_KEY: supersecretpassword
@@ -161,6 +211,7 @@ jobs:
 
           Write-Host "Uploading to MinIO Cloud (bookstack project)..."
           $awsExe = "C:\Program Files\Amazon\AWSCLIV2\aws.exe"
+          & $awsExe s3 cp "$env:DATA_DIR\hardware_metadata.json" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/hardware_metadata.json" --endpoint-url http://100.67.86.32:9000
           & $awsExe s3 cp "$env:DATA_DIR\Idle.zip"             "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/Idle.zip"             --endpoint-url http://100.67.86.32:9000
           & $awsExe s3 cp "$env:DATA_DIR\Composer_Install.zip" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/Composer_Install.zip" --endpoint-url http://100.67.86.32:9000
           & $awsExe s3 cp "$env:DATA_DIR\DB_Migration.zip"     "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/DB_Migration.zip"     --endpoint-url http://100.67.86.32:9000
@@ -193,6 +244,35 @@ jobs:
           mkdir -p "$DATA_DIR/Composer_Install"
           mkdir -p "$DATA_DIR/DB_Migration"
           mkdir -p "$DATA_DIR/PHPUnit_Tests"
+        shell: bash
+
+      - name: Capture Hardware Metadata
+        run: |
+          META_FILE="$DATA_DIR/hardware_metadata.json"
+          CPU_MODEL=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "Apple Silicon")
+          TOTAL_CORES=$(sysctl -n hw.physicalcpu)
+          P_CORES=$(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null || echo "N/A")
+          E_CORES=$(sysctl -n hw.perflevel1.physicalcpu 2>/dev/null || echo "N/A")
+          CPU_THREADS=$(sysctl -n hw.logicalcpu)
+          RAM_GB=$(echo "scale=1; $(sysctl -n hw.memsize) / 1073741824" | bc)
+          OS_VER=$(sw_vers -productVersion)
+          DOCKER_VER=$(docker --version)
+          cat > "$META_FILE" << EOFMETA
+          {
+            "platform": "mac_m2_macos",
+            "captured_at": "$(date '+%Y-%m-%d %H:%M:%S')",
+            "cpu_model": "$CPU_MODEL",
+            "cpu_cores": $TOTAL_CORES,
+            "cpu_p_cores": "$P_CORES",
+            "cpu_e_cores": "$E_CORES",
+            "cpu_threads": $CPU_THREADS,
+            "ram_gb": $RAM_GB,
+            "os_version": "macOS $OS_VER",
+            "docker_ver": "$DOCKER_VER"
+          }
+          EOFMETA
+          echo "Hardware metadata captured:"
+          cat "$META_FILE"
         shell: bash
 
       # --- INFRASTRUCTURE: Start MySQL (not profiled) ---
@@ -247,10 +327,11 @@ jobs:
       - name: Profile Composer Install
         run: |
           W3C_TRACEPARENT="00-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-16)-01"
+          PROFILER_CAP=900
           sudo powermetrics \
             --samplers cpu_power \
             -i 100 \
-            -n 1800 \
+            -n $((PROFILER_CAP * 10)) \
             > "$DATA_DIR/Composer_Install/power_data.txt" 2>/dev/null &
           PROF_PID=$!
           sleep 10
@@ -270,16 +351,27 @@ jobs:
 
           echo "Composer_Install_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/Composer_Install/timestamps.csv"
           echo "Composer_Install_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/Composer_Install/timestamps.csv"
+
+          # Duration overflow guard
+          ACTUAL_SEC=$(python3 -c "from datetime import datetime; s=datetime.strptime('$START_TIME','%Y-%m-%d %H:%M:%S.%f'); e=datetime.strptime('$END_TIME','%Y-%m-%d %H:%M:%S.%f'); print(round((e-s).total_seconds(),2))")
+          USABLE_CAP=$((PROFILER_CAP - 20))
+          TRUNCATED=$(python3 -c "print('true' if $ACTUAL_SEC > $USABLE_CAP else 'false')")
+          echo "{\"task_seconds\": $ACTUAL_SEC, \"profiler_cap_seconds\": $PROFILER_CAP, \"usable_cap_seconds\": $USABLE_CAP, \"truncated\": $TRUNCATED}" > "$DATA_DIR/Composer_Install/duration_check.json"
+          if [ "$TRUNCATED" = "true" ]; then
+            echo "TRUNCATED DATA: Composer ran ${ACTUAL_SEC}s but profiler usable window was ${USABLE_CAP}s"
+            exit 1
+          fi
         shell: bash
 
       # --- SCENARIO 3: DATABASE MIGRATION ---
       - name: Profile Database Migration
         run: |
           W3C_TRACEPARENT="00-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-16)-01"
+          PROFILER_CAP=120
           sudo powermetrics \
             --samplers cpu_power \
             -i 100 \
-            -n 600 \
+            -n $((PROFILER_CAP * 10)) \
             > "$DATA_DIR/DB_Migration/power_data.txt" 2>/dev/null &
           PROF_PID=$!
           sleep 10
@@ -294,6 +386,16 @@ jobs:
 
           echo "DB_Migration_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/DB_Migration/timestamps.csv"
           echo "DB_Migration_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/DB_Migration/timestamps.csv"
+
+          # Duration overflow guard
+          ACTUAL_SEC=$(python3 -c "from datetime import datetime; s=datetime.strptime('$START_TIME','%Y-%m-%d %H:%M:%S.%f'); e=datetime.strptime('$END_TIME','%Y-%m-%d %H:%M:%S.%f'); print(round((e-s).total_seconds(),2))")
+          USABLE_CAP=$((PROFILER_CAP - 20))
+          TRUNCATED=$(python3 -c "print('true' if $ACTUAL_SEC > $USABLE_CAP else 'false')")
+          echo "{\"task_seconds\": $ACTUAL_SEC, \"profiler_cap_seconds\": $PROFILER_CAP, \"usable_cap_seconds\": $USABLE_CAP, \"truncated\": $TRUNCATED}" > "$DATA_DIR/DB_Migration/duration_check.json"
+          if [ "$TRUNCATED" = "true" ]; then
+            echo "TRUNCATED DATA: Migration ran ${ACTUAL_SEC}s but profiler usable window was ${USABLE_CAP}s"
+            exit 1
+          fi
         shell: bash
 
       # --- SCENARIO 4: PHPUNIT TEST SUITE ---
@@ -304,10 +406,11 @@ jobs:
           # Prepare the test database (not profiled)
           docker compose run --rm --entrypoint php app artisan migrate:fresh --database=mysql_testing --force --no-interaction
 
+          PROFILER_CAP=1500
           sudo powermetrics \
             --samplers cpu_power \
             -i 100 \
-            -n 3000 \
+            -n $((PROFILER_CAP * 10)) \
             > "$DATA_DIR/PHPUnit_Tests/power_data.txt" 2>/dev/null &
           PROF_PID=$!
           sleep 10
@@ -322,6 +425,16 @@ jobs:
 
           echo "PHPUnit_Tests_Start,$START_TIME,$W3C_TRACEPARENT" > "$DATA_DIR/PHPUnit_Tests/timestamps.csv"
           echo "PHPUnit_Tests_End,$END_TIME,$W3C_TRACEPARENT" >> "$DATA_DIR/PHPUnit_Tests/timestamps.csv"
+
+          # Duration overflow guard
+          ACTUAL_SEC=$(python3 -c "from datetime import datetime; s=datetime.strptime('$START_TIME','%Y-%m-%d %H:%M:%S.%f'); e=datetime.strptime('$END_TIME','%Y-%m-%d %H:%M:%S.%f'); print(round((e-s).total_seconds(),2))")
+          USABLE_CAP=$((PROFILER_CAP - 20))
+          TRUNCATED=$(python3 -c "print('true' if $ACTUAL_SEC > $USABLE_CAP else 'false')")
+          echo "{\"task_seconds\": $ACTUAL_SEC, \"profiler_cap_seconds\": $PROFILER_CAP, \"usable_cap_seconds\": $USABLE_CAP, \"truncated\": $TRUNCATED}" > "$DATA_DIR/PHPUnit_Tests/duration_check.json"
+          if [ "$TRUNCATED" = "true" ]; then
+            echo "TRUNCATED DATA: PHPUnit ran ${ACTUAL_SEC}s but profiler usable window was ${USABLE_CAP}s"
+            exit 1
+          fi
         shell: bash
 
       # --- CONVERT: powermetrics → AMD-compatible timechart.csv ---
@@ -330,6 +443,34 @@ jobs:
         run: |
           echo "Converting powermetrics output to AMD-compatible timechart.csv..."
           python3 scripts/parse_powermetrics.py "$RUN_ID"
+        shell: bash
+
+      - name: Validate Converted Data
+        if: always()
+        run: |
+          echo "Validating converted timechart.csv files..."
+          FAIL=0
+          for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests; do
+            CSV="$DATA_DIR/$SCENARIO/timechart.csv"
+            if [ ! -f "$CSV" ]; then
+              echo "❌ MISSING: $CSV"
+              FAIL=1
+            else
+              ROWS=$(tail -n +3 "$CSV" | wc -l | tr -d ' ')
+              if [ "$ROWS" -lt 1 ]; then
+                echo "❌ EMPTY: $CSV has 0 data rows"
+                FAIL=1
+              else
+                echo "✅ $SCENARIO: $ROWS data rows"
+              fi
+            fi
+          done
+          if [ $FAIL -eq 1 ]; then
+            echo "❌ VALIDATION FAILED — corrupt data will NOT be uploaded"
+            exit 1
+          else
+            echo "✅ All timechart.csv files validated successfully"
+          fi
         shell: bash
 
       # --- TEARDOWN ---
@@ -347,21 +488,24 @@ jobs:
           retention-days: 90
 
       - name: Offload to MinIO Bucket
-        if: always()
         env:
           AWS_ACCESS_KEY_ID: researcher
           AWS_SECRET_ACCESS_KEY: supersecretpassword
           AWS_DEFAULT_REGION: us-east-1
         run: |
           echo "Compressing Raw Telemetry..."
-          cd "$DATA_DIR/Idle"             && zip -j "$DATA_DIR/Idle.zip"             timechart.csv timestamps.csv && cd -
-          cd "$DATA_DIR/Composer_Install" && zip -j "$DATA_DIR/Composer_Install.zip" timechart.csv timestamps.csv && cd -
-          cd "$DATA_DIR/DB_Migration"     && zip -j "$DATA_DIR/DB_Migration.zip"     timechart.csv timestamps.csv && cd -
-          cd "$DATA_DIR/PHPUnit_Tests"    && zip -j "$DATA_DIR/PHPUnit_Tests.zip"    timechart.csv timestamps.csv && cd -
+          for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests; do
+            cd "$DATA_DIR/$SCENARIO"
+            FILES="timechart.csv timestamps.csv"
+            if [ -f duration_check.json ]; then FILES="$FILES duration_check.json"; fi
+            zip -j "$DATA_DIR/${SCENARIO}.zip" $FILES
+            cd -
+          done
 
           echo "Uploading to MinIO Cloud (bookstack project)..."
           docker run --rm -v "$DATA_DIR:/data" --entrypoint sh minio/mc -c "\
             mc alias set myminio http://100.67.86.32:9000 researcher supersecretpassword && \
+            mc cp /data/hardware_metadata.json myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/hardware_metadata.json && \
             mc cp /data/Idle.zip             myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/Idle.zip && \
             mc cp /data/Composer_Install.zip myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/Composer_Install.zip && \
             mc cp /data/DB_Migration.zip     myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/DB_Migration.zip && \
