@@ -48,6 +48,22 @@ jobs:
           $meta | ConvertTo-Json
         shell: powershell
 
+      - name: Define Windows UTF-8 JSON Writer
+        run: |
+          function Write-Utf8JsonNoBom($Path, $Value) {
+            $json = $Value | ConvertTo-Json -Compress
+            $encoding = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($Path, $json, $encoding)
+          }
+          @'
+          function Write-Utf8JsonNoBom($Path, $Value) {
+            $json = $Value | ConvertTo-Json -Compress
+            $encoding = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($Path, $json, $encoding)
+          }
+          '@ | Out-File -FilePath "$env:DATA_DIR\write-json.ps1" -Encoding ascii
+        shell: powershell
+
       # --- INFRASTRUCTURE: Start MySQL (not profiled) ---
       - name: Create .env and Start MySQL
         run: |
@@ -114,7 +130,8 @@ jobs:
           $actualSec = ((Get-Date $endTime) - (Get-Date $startTime)).TotalSeconds
           $usableCap = $profilerCap - 20  # subtract baseline + cooldown
           $truncated = $actualSec -gt $usableCap
-          @{ task_seconds = [math]::Round($actualSec,2); profiler_cap_seconds = $profilerCap; usable_cap_seconds = $usableCap; truncated = $truncated } | ConvertTo-Json | Out-File "$env:DATA_DIR\Composer_Install\duration_check.json" -Encoding utf8
+          . "$env:DATA_DIR\write-json.ps1"
+          Write-Utf8JsonNoBom "$env:DATA_DIR\Composer_Install\duration_check.json" @{ task_seconds = [math]::Round($actualSec,2); profiler_cap_seconds = $profilerCap; usable_cap_seconds = $usableCap; truncated = $truncated }
           if ($truncated) {
             Write-Error "TRUNCATED DATA: Composer ran ${actualSec}s but profiler usable window was ${usableCap}s"
             exit 1
@@ -143,7 +160,8 @@ jobs:
           $actualSec = ((Get-Date $endTime) - (Get-Date $startTime)).TotalSeconds
           $usableCap = $profilerCap - 20
           $truncated = $actualSec -gt $usableCap
-          @{ task_seconds = [math]::Round($actualSec,2); profiler_cap_seconds = $profilerCap; usable_cap_seconds = $usableCap; truncated = $truncated } | ConvertTo-Json | Out-File "$env:DATA_DIR\DB_Migration\duration_check.json" -Encoding utf8
+          . "$env:DATA_DIR\write-json.ps1"
+          Write-Utf8JsonNoBom "$env:DATA_DIR\DB_Migration\duration_check.json" @{ task_seconds = [math]::Round($actualSec,2); profiler_cap_seconds = $profilerCap; usable_cap_seconds = $usableCap; truncated = $truncated }
           if ($truncated) {
             Write-Error "TRUNCATED DATA: Migration ran ${actualSec}s but profiler usable window was ${usableCap}s"
             exit 1
@@ -176,7 +194,8 @@ jobs:
           $actualSec = ((Get-Date $endTime) - (Get-Date $startTime)).TotalSeconds
           $usableCap = $profilerCap - 20
           $truncated = $actualSec -gt $usableCap
-          @{ task_seconds = [math]::Round($actualSec,2); profiler_cap_seconds = $profilerCap; usable_cap_seconds = $usableCap; truncated = $truncated } | ConvertTo-Json | Out-File "$env:DATA_DIR\PHPUnit_Tests\duration_check.json" -Encoding utf8
+          . "$env:DATA_DIR\write-json.ps1"
+          Write-Utf8JsonNoBom "$env:DATA_DIR\PHPUnit_Tests\duration_check.json" @{ task_seconds = [math]::Round($actualSec,2); profiler_cap_seconds = $profilerCap; usable_cap_seconds = $usableCap; truncated = $truncated }
           if ($truncated) {
             Write-Error "TRUNCATED DATA: PHPUnit ran ${actualSec}s but profiler usable window was ${usableCap}s"
             exit 1
