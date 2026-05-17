@@ -204,10 +204,41 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
         run: |
           Write-Host "Compressing Raw Telemetry..."
-          Compress-Archive -Path "$env:DATA_DIR\Idle\*"             -DestinationPath "$env:DATA_DIR\Idle.zip"             -Force
-          Compress-Archive -Path "$env:DATA_DIR\Composer_Install\*" -DestinationPath "$env:DATA_DIR\Composer_Install.zip" -Force
-          Compress-Archive -Path "$env:DATA_DIR\DB_Migration\*"     -DestinationPath "$env:DATA_DIR\DB_Migration.zip"     -Force
-          Compress-Archive -Path "$env:DATA_DIR\PHPUnit_Tests\*"    -DestinationPath "$env:DATA_DIR\PHPUnit_Tests.zip"    -Force
+          $scenarios = @("Idle", "Composer_Install", "DB_Migration", "PHPUnit_Tests")
+          foreach ($scenario in $scenarios) {
+            $scenarioDir = Join-Path $env:DATA_DIR $scenario
+            $rootTimechart = Join-Path $scenarioDir "timechart.csv"
+            $timestamps = Join-Path $scenarioDir "timestamps.csv"
+
+            if (-not (Test-Path -LiteralPath $rootTimechart)) {
+              $nestedTimechart = Get-ChildItem -LiteralPath $scenarioDir -Recurse -Filter "timechart.csv" -File |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 1
+
+              if ($null -eq $nestedTimechart) {
+                throw "Missing timechart.csv for $scenario; refusing to upload incomplete telemetry."
+              }
+
+              Copy-Item -LiteralPath $nestedTimechart.FullName -Destination $rootTimechart -Force
+            }
+
+            foreach ($requiredFile in @($rootTimechart, $timestamps)) {
+              if (-not (Test-Path -LiteralPath $requiredFile)) {
+                throw "Missing required telemetry file: $requiredFile"
+              }
+              if ((Get-Item -LiteralPath $requiredFile).Length -eq 0) {
+                throw "Required telemetry file is empty: $requiredFile"
+              }
+            }
+
+            $files = @($rootTimechart, $timestamps)
+            $durationCheck = Join-Path $scenarioDir "duration_check.json"
+            if (Test-Path -LiteralPath $durationCheck) {
+              $files += $durationCheck
+            }
+
+            Compress-Archive -LiteralPath $files -DestinationPath "$env:DATA_DIR\$scenario.zip" -Force
+          }
 
           Write-Host "Uploading to MinIO Cloud (bookstack project)..."
           $awsExe = "C:\Program Files\Amazon\AWSCLIV2\aws.exe"
@@ -448,28 +479,41 @@ jobs:
       - name: Validate Converted Data
         if: always()
         run: |
+          set -euo pipefail
           echo "Validating converted timechart.csv files..."
           FAIL=0
           for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests; do
             CSV="$DATA_DIR/$SCENARIO/timechart.csv"
+            TS="$DATA_DIR/$SCENARIO/timestamps.csv"
             if [ ! -f "$CSV" ]; then
-              echo "❌ MISSING: $CSV"
+              echo "ERROR: MISSING: $CSV"
+              FAIL=1
+            elif [ ! -s "$CSV" ]; then
+              echo "ERROR: EMPTY: $CSV"
               FAIL=1
             else
               ROWS=$(tail -n +3 "$CSV" | wc -l | tr -d ' ')
               if [ "$ROWS" -lt 1 ]; then
-                echo "❌ EMPTY: $CSV has 0 data rows"
+                echo "ERROR: EMPTY: $CSV has 0 data rows"
                 FAIL=1
               else
-                echo "✅ $SCENARIO: $ROWS data rows"
+                echo "OK: $SCENARIO: $ROWS data rows"
               fi
+            fi
+
+            if [ ! -f "$TS" ]; then
+              echo "ERROR: MISSING: $TS"
+              FAIL=1
+            elif [ ! -s "$TS" ]; then
+              echo "ERROR: EMPTY: $TS"
+              FAIL=1
             fi
           done
           if [ $FAIL -eq 1 ]; then
-            echo "❌ VALIDATION FAILED — corrupt data will NOT be uploaded"
+            echo "ERROR: VALIDATION FAILED - corrupt data will NOT be uploaded"
             exit 1
           else
-            echo "✅ All timechart.csv files validated successfully"
+            echo "OK: All telemetry files validated successfully"
           fi
         shell: bash
 
@@ -493,13 +537,25 @@ jobs:
           AWS_SECRET_ACCESS_KEY: supersecretpassword
           AWS_DEFAULT_REGION: us-east-1
         run: |
+          set -euo pipefail
           echo "Compressing Raw Telemetry..."
           for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests; do
-            cd "$DATA_DIR/$SCENARIO"
-            FILES="timechart.csv timestamps.csv"
-            if [ -f duration_check.json ]; then FILES="$FILES duration_check.json"; fi
-            zip -j "$DATA_DIR/${SCENARIO}.zip" $FILES
-            cd -
+            SCENARIO_DIR="$DATA_DIR/$SCENARIO"
+            FILES=("$SCENARIO_DIR/timechart.csv" "$SCENARIO_DIR/timestamps.csv")
+
+            for REQUIRED_FILE in "$SCENARIO_DIR/timechart.csv" "$SCENARIO_DIR/timestamps.csv"; do
+              if [ ! -s "$REQUIRED_FILE" ]; then
+                echo "ERROR: Missing or empty required telemetry file: $REQUIRED_FILE"
+                exit 1
+              fi
+            done
+
+            if [ -f "$SCENARIO_DIR/duration_check.json" ]; then
+              FILES+=("$SCENARIO_DIR/duration_check.json")
+            fi
+
+            zip -j "$DATA_DIR/${SCENARIO}.zip" "${FILES[@]}"
+            zip -T "$DATA_DIR/${SCENARIO}.zip"
           done
 
           echo "Uploading to MinIO Cloud (bookstack project)..."
