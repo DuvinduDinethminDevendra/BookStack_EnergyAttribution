@@ -28,6 +28,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$env:DATA_DIR\Composer_Install"
           New-Item -ItemType Directory -Force -Path "$env:DATA_DIR\DB_Migration"
           New-Item -ItemType Directory -Force -Path "$env:DATA_DIR\PHPUnit_Tests"
+          New-Item -ItemType Directory -Force -Path "$env:DATA_DIR\PHPUnit_Directory_Spans"
         shell: powershell
 
       - name: Capture Hardware Metadata
@@ -202,6 +203,152 @@ jobs:
           }
         shell: powershell
 
+      # --- SCENARIO 5: PHPUNIT DIRECTORY SPANS ---
+      - name: Profile PHPUnit Directory Spans
+        run: |
+          $scenario = "PHPUnit_Directory_Spans"
+          $scenarioDir = Join-Path $env:DATA_DIR $scenario
+          $rawSpans = Join-Path $scenarioDir "pipeline_spans.ndjson"
+          $spansJson = Join-Path $scenarioDir "spans.json"
+          Remove-Item -LiteralPath $rawSpans, $spansJson -Force -ErrorAction SilentlyContinue
+
+          $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
+
+          # Prepare the test database once before profiling the externally wrapped PHPUnit spans.
+          docker compose run --rm --entrypoint php app artisan migrate:fresh --database=mysql_testing --force --no-interaction ; $global:LASTEXITCODE = 0
+
+          $profilerCap = 3600
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d $profilerCap -o `"$scenarioDir\power_data.csv`"" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 10
+
+          $failedSpanCount = 0
+          $scenarioStartClock = Get-Date
+          $startTime = $scenarioStartClock.ToString("yyyy-MM-dd HH:mm:ss.fff")
+
+          function Invoke-PipelineSpan {
+            param(
+              [Parameter(Mandatory=$true)][string]$Name,
+              [Parameter(Mandatory=$true)][string[]]$TestArgs,
+              [string]$TestPath = "",
+              [bool]$Calibration = $false
+            )
+
+            Write-Host "Running external CI/CD span: $Name"
+            $startMs = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+            $dockerArgs = @("compose", "run", "--rm", "--entrypoint", "php", "app", "artisan", "test") + $TestArgs
+            & docker @dockerArgs
+            $exitCode = $LASTEXITCODE
+            $endMs = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+
+            if ($exitCode -ne 0 -and -not $Calibration) {
+              $script:failedSpanCount += 1
+              Write-Warning "Span $Name exited with code $exitCode; recording and continuing."
+            } elseif ($exitCode -ne 0) {
+              Write-Host "Calibration span $Name exited with code $exitCode; recording as calibration overhead."
+            }
+
+            $commandText = "php artisan test " + ($TestArgs -join " ")
+            node scripts\make_pipeline_spans.js record `
+              --output "$rawSpans" `
+              --name "$Name" `
+              --start-ms "$startMs" `
+              --end-ms "$endMs" `
+              --exit-code "$exitCode" `
+              --test-path "$TestPath" `
+              --command "$commandText" `
+              --calibration "$Calibration" `
+              --operation "phpunit-directory"
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to record pipeline span $Name"
+            }
+          }
+
+          for ($i = 1; $i -le 3; $i++) {
+            Invoke-PipelineSpan -Name "phpunit.CalibrationEmpty.$i" -TestArgs @("--filter", "__EnergyAttributionNoMatchingTest__") -Calibration $true
+          }
+
+          $rootTestFiles = @(
+            "tests/DebugViewTest.php",
+            "tests/ErrorTest.php",
+            "tests/FavouriteTest.php",
+            "tests/HomepageTest.php",
+            "tests/LanguageTest.php",
+            "tests/PublicActionTest.php",
+            "tests/SecurityHeaderTest.php",
+            "tests/SessionTest.php",
+            "tests/StatusTest.php",
+            "tests/UrlTest.php"
+          )
+          Invoke-PipelineSpan -Name "phpunit.Root" -TestArgs $rootTestFiles -TestPath "tests/root-files"
+
+          $testDirectories = @(
+            "Activity",
+            "Api",
+            "Auth",
+            "Commands",
+            "Entity",
+            "Exports",
+            "Meta",
+            "Permissions",
+            "References",
+            "Search",
+            "Settings",
+            "Sorting",
+            "Theme",
+            "Unit",
+            "Uploads",
+            "User",
+            "Util"
+          )
+
+          foreach ($testDirectory in $testDirectories) {
+            Invoke-PipelineSpan -Name "phpunit.$testDirectory" -TestArgs @("tests/$testDirectory") -TestPath "tests/$testDirectory"
+          }
+
+          $scenarioEndClock = Get-Date
+          $endTime = $scenarioEndClock.ToString("yyyy-MM-dd HH:mm:ss.fff")
+
+          Start-Sleep -Seconds 10
+          Stop-Process -Id $uprof.Id -Force -ErrorAction SilentlyContinue
+
+          echo "${scenario}_Start,$startTime,$w3cTraceparent" > "$scenarioDir\timestamps.csv"
+          echo "${scenario}_End,$endTime,$w3cTraceparent" >> "$scenarioDir\timestamps.csv"
+
+          node scripts\make_pipeline_spans.js build --input "$rawSpans" --output "$spansJson" --traceparent "$w3cTraceparent" --scenario "$scenario"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to build spans.json for $scenario"
+          }
+
+          $actualSec = ($scenarioEndClock - $scenarioStartClock).TotalSeconds
+          $usableCap = $profilerCap - 20
+          $truncated = $actualSec -gt $usableCap
+          $spanCount = @(Get-Content -LiteralPath $rawSpans | Where-Object { $_.Trim().Length -gt 0 }).Count
+          . "$env:DATA_DIR\write-json.ps1"
+          Write-Utf8JsonNoBom "$scenarioDir\duration_check.json" @{
+            scenario = $scenario
+            profiler_cap_seconds = $profilerCap
+            usable_cap_seconds = $usableCap
+            actual_duration_seconds = [math]::Round($actualSec, 2)
+            task_seconds = [math]::Round($actualSec, 2)
+            truncated = $truncated
+            overrun = $truncated
+            span_count = $spanCount
+            failed_span_count = $failedSpanCount
+            calibration_repetitions = 3
+          }
+
+          if ($spanCount -ne 21) {
+            Write-Error "Expected 21 span records but found $spanCount"
+            exit 1
+          }
+
+          if ($truncated) {
+            Write-Error "TRUNCATED DATA: PHPUnit directory spans ran ${actualSec}s but profiler usable window was ${usableCap}s"
+            exit 1
+          }
+        shell: powershell
+
       # --- TEARDOWN ---
       - name: Teardown Docker Environment
         if: always()
@@ -223,7 +370,7 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
         run: |
           Write-Host "Compressing Raw Telemetry..."
-          $scenarios = @("Idle", "Composer_Install", "DB_Migration", "PHPUnit_Tests")
+          $scenarios = @("Idle", "Composer_Install", "DB_Migration", "PHPUnit_Tests", "PHPUnit_Directory_Spans")
           foreach ($scenario in $scenarios) {
             $scenarioDir = Join-Path $env:DATA_DIR $scenario
             $rootTimechart = Join-Path $scenarioDir "timechart.csv"
@@ -255,6 +402,16 @@ jobs:
             if (Test-Path -LiteralPath $durationCheck) {
               $files += $durationCheck
             }
+            $spansJson = Join-Path $scenarioDir "spans.json"
+            if ($scenario -eq "PHPUnit_Directory_Spans") {
+              if (-not (Test-Path -LiteralPath $spansJson)) {
+                throw "Missing required spans.json for $scenario"
+              }
+              if ((Get-Item -LiteralPath $spansJson).Length -eq 0) {
+                throw "Required spans.json is empty for $scenario"
+              }
+              $files += $spansJson
+            }
 
             Compress-Archive -LiteralPath $files -DestinationPath "$env:DATA_DIR\$scenario.zip" -Force
           }
@@ -266,6 +423,7 @@ jobs:
           & $awsExe s3 cp "$env:DATA_DIR\Composer_Install.zip" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/Composer_Install.zip" --endpoint-url http://100.67.86.32:9000
           & $awsExe s3 cp "$env:DATA_DIR\DB_Migration.zip"     "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/DB_Migration.zip"     --endpoint-url http://100.67.86.32:9000
           & $awsExe s3 cp "$env:DATA_DIR\PHPUnit_Tests.zip"    "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/PHPUnit_Tests.zip"    --endpoint-url http://100.67.86.32:9000
+          & $awsExe s3 cp "$env:DATA_DIR\PHPUnit_Directory_Spans.zip" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/PHPUnit_Directory_Spans.zip" --endpoint-url http://100.67.86.32:9000
 
           Write-Host "Cleaning up local disk..."
           Remove-Item -Path "$env:DATA_DIR" -Recurse -Force
@@ -294,6 +452,7 @@ jobs:
           mkdir -p "$DATA_DIR/Composer_Install"
           mkdir -p "$DATA_DIR/DB_Migration"
           mkdir -p "$DATA_DIR/PHPUnit_Tests"
+          mkdir -p "$DATA_DIR/PHPUnit_Directory_Spans"
         shell: bash
 
       - name: Capture Hardware Metadata
@@ -487,6 +646,129 @@ jobs:
           fi
         shell: bash
 
+      # --- SCENARIO 5: PHPUNIT DIRECTORY SPANS ---
+      - name: Profile PHPUnit Directory Spans
+        run: |
+          set -euo pipefail
+          SCENARIO="PHPUnit_Directory_Spans"
+          SCENARIO_DIR="$DATA_DIR/$SCENARIO"
+          RAW_SPANS="$SCENARIO_DIR/pipeline_spans.ndjson"
+          SPANS_JSON="$SCENARIO_DIR/spans.json"
+          rm -f "$RAW_SPANS" "$SPANS_JSON"
+
+          W3C_TRACEPARENT="00-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')-$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-16)-01"
+
+          # Prepare the test database once before profiling the externally wrapped PHPUnit spans.
+          docker compose run --rm --entrypoint php app artisan migrate:fresh --database=mysql_testing --force --no-interaction
+
+          PROFILER_CAP=3600
+          sudo powermetrics \
+            --samplers cpu_power \
+            -i 100 \
+            -n $((PROFILER_CAP * 10)) \
+            > "$SCENARIO_DIR/power_data.txt" 2>/dev/null &
+          PROF_PID=$!
+          sleep 10
+
+          FAILED_SPAN_COUNT=0
+          START_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+
+          run_span() {
+            local name="$1"
+            local calibration="$2"
+            local test_path="$3"
+            shift 3
+
+            echo "Running external CI/CD span: $name"
+            local start_ms
+            start_ms=$(node -e "console.log(Date.now())")
+            set +e
+            docker compose run --rm --entrypoint php app artisan test "$@"
+            local exit_code=$?
+            set -e
+            local end_ms
+            end_ms=$(node -e "console.log(Date.now())")
+
+            if [ "$exit_code" -ne 0 ] && [ "$calibration" != "true" ]; then
+              FAILED_SPAN_COUNT=$((FAILED_SPAN_COUNT + 1))
+              echo "WARNING: Span $name exited with code $exit_code; recording and continuing."
+            elif [ "$exit_code" -ne 0 ]; then
+              echo "Calibration span $name exited with code $exit_code; recording as calibration overhead."
+            fi
+
+            node scripts/make_pipeline_spans.js record \
+              --output "$RAW_SPANS" \
+              --name "$name" \
+              --start-ms "$start_ms" \
+              --end-ms "$end_ms" \
+              --exit-code "$exit_code" \
+              --test-path "$test_path" \
+              --command "php artisan test $*" \
+              --calibration "$calibration" \
+              --operation "phpunit-directory"
+          }
+
+          for REP in 1 2 3; do
+            run_span "phpunit.CalibrationEmpty.$REP" "true" "" --filter __EnergyAttributionNoMatchingTest__
+          done
+
+          run_span "phpunit.Root" "false" "tests/root-files" \
+            tests/DebugViewTest.php \
+            tests/ErrorTest.php \
+            tests/FavouriteTest.php \
+            tests/HomepageTest.php \
+            tests/LanguageTest.php \
+            tests/PublicActionTest.php \
+            tests/SecurityHeaderTest.php \
+            tests/SessionTest.php \
+            tests/StatusTest.php \
+            tests/UrlTest.php
+
+          for TEST_DIR in Activity Api Auth Commands Entity Exports Meta Permissions References Search Settings Sorting Theme Unit Uploads User Util; do
+            run_span "phpunit.$TEST_DIR" "false" "tests/$TEST_DIR" "tests/$TEST_DIR"
+          done
+
+          END_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+
+          sleep 10
+          sudo kill $PROF_PID 2>/dev/null || true
+          wait $PROF_PID 2>/dev/null || true
+
+          echo "${SCENARIO}_Start,$START_TIME,$W3C_TRACEPARENT" > "$SCENARIO_DIR/timestamps.csv"
+          echo "${SCENARIO}_End,$END_TIME,$W3C_TRACEPARENT" >> "$SCENARIO_DIR/timestamps.csv"
+
+          node scripts/make_pipeline_spans.js build --input "$RAW_SPANS" --output "$SPANS_JSON" --traceparent "$W3C_TRACEPARENT" --scenario "$SCENARIO"
+
+          ACTUAL_SEC=$(python3 -c "from datetime import datetime; s=datetime.strptime('$START_TIME','%Y-%m-%d %H:%M:%S.%f'); e=datetime.strptime('$END_TIME','%Y-%m-%d %H:%M:%S.%f'); print(round((e-s).total_seconds(),2))")
+          USABLE_CAP=$((PROFILER_CAP - 20))
+          TRUNCATED=$(python3 -c "print('true' if $ACTUAL_SEC > $USABLE_CAP else 'false')")
+          SPAN_COUNT=$(grep -cve '^[[:space:]]*$' "$RAW_SPANS")
+          cat > "$SCENARIO_DIR/duration_check.json" << EOFJSON
+          {
+            "scenario": "$SCENARIO",
+            "profiler_cap_seconds": $PROFILER_CAP,
+            "usable_cap_seconds": $USABLE_CAP,
+            "actual_duration_seconds": $ACTUAL_SEC,
+            "task_seconds": $ACTUAL_SEC,
+            "truncated": $TRUNCATED,
+            "overrun": $TRUNCATED,
+            "span_count": $SPAN_COUNT,
+            "failed_span_count": $FAILED_SPAN_COUNT,
+            "calibration_repetitions": 3
+          }
+          EOFJSON
+
+          if [ "$SPAN_COUNT" -ne 21 ]; then
+            echo "Expected 21 span records but found $SPAN_COUNT"
+            exit 1
+          fi
+
+          if [ "$TRUNCATED" = "true" ]; then
+            echo "TRUNCATED DATA: PHPUnit directory spans ran ${ACTUAL_SEC}s but profiler usable window was ${USABLE_CAP}s"
+            exit 1
+          fi
+        shell: bash
+
       # --- CONVERT: powermetrics → AMD-compatible timechart.csv ---
       - name: Convert powermetrics to timechart.csv
         if: always()
@@ -501,7 +783,7 @@ jobs:
           set -euo pipefail
           echo "Validating converted timechart.csv files..."
           FAIL=0
-          for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests; do
+          for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests PHPUnit_Directory_Spans; do
             CSV="$DATA_DIR/$SCENARIO/timechart.csv"
             TS="$DATA_DIR/$SCENARIO/timestamps.csv"
             if [ ! -f "$CSV" ]; then
@@ -526,6 +808,17 @@ jobs:
             elif [ ! -s "$TS" ]; then
               echo "ERROR: EMPTY: $TS"
               FAIL=1
+            fi
+
+            if [ "$SCENARIO" = "PHPUnit_Directory_Spans" ]; then
+              SPANS="$DATA_DIR/$SCENARIO/spans.json"
+              if [ ! -f "$SPANS" ]; then
+                echo "ERROR: MISSING: $SPANS"
+                FAIL=1
+              elif [ ! -s "$SPANS" ]; then
+                echo "ERROR: EMPTY: $SPANS"
+                FAIL=1
+              fi
             fi
           done
           if [ $FAIL -eq 1 ]; then
@@ -558,7 +851,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Compressing Raw Telemetry..."
-          for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests; do
+          for SCENARIO in Idle Composer_Install DB_Migration PHPUnit_Tests PHPUnit_Directory_Spans; do
             SCENARIO_DIR="$DATA_DIR/$SCENARIO"
             FILES=("$SCENARIO_DIR/timechart.csv" "$SCENARIO_DIR/timestamps.csv")
 
@@ -573,6 +866,14 @@ jobs:
               FILES+=("$SCENARIO_DIR/duration_check.json")
             fi
 
+            if [ "$SCENARIO" = "PHPUnit_Directory_Spans" ]; then
+              if [ ! -s "$SCENARIO_DIR/spans.json" ]; then
+                echo "ERROR: Missing or empty spans.json for $SCENARIO"
+                exit 1
+              fi
+              FILES+=("$SCENARIO_DIR/spans.json")
+            fi
+
             zip -j "$DATA_DIR/${SCENARIO}.zip" "${FILES[@]}"
             zip -T "$DATA_DIR/${SCENARIO}.zip"
           done
@@ -584,7 +885,8 @@ jobs:
             mc cp /data/Idle.zip             myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/Idle.zip && \
             mc cp /data/Composer_Install.zip myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/Composer_Install.zip && \
             mc cp /data/DB_Migration.zip     myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/DB_Migration.zip && \
-            mc cp /data/PHPUnit_Tests.zip    myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/PHPUnit_Tests.zip"
+            mc cp /data/PHPUnit_Tests.zip    myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/PHPUnit_Tests.zip && \
+            mc cp /data/PHPUnit_Directory_Spans.zip myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/PHPUnit_Directory_Spans.zip"
 
           echo "Cleaning up local disk..."
           rm -rf "$DATA_DIR"
