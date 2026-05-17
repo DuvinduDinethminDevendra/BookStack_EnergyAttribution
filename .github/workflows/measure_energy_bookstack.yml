@@ -52,7 +52,7 @@ jobs:
           $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
           echo "Generated Trace-ID: $w3cTraceparent"
           echo "Starting AMD uProf in background (100ms polling)..."
-          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 60 -o `"$env:DATA_DIR\Idle\power_data.csv`"" -PassThru -NoNewWindow
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 60 -o `"$env:DATA_DIR\Idle\power_data.csv`"" -PassThru -WindowStyle Hidden
 
           echo "Capturing 10-second pre-execution baseline..."
           Start-Sleep -Seconds 10
@@ -76,11 +76,11 @@ jobs:
       - name: Profile Composer Install
         run: |
           $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
-          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 180 -o `"$env:DATA_DIR\Composer_Install\power_data.csv`"" -PassThru -NoNewWindow
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 180 -o `"$env:DATA_DIR\Composer_Install\power_data.csv`"" -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-          docker run --rm -v "${PWD}:/app" -w /app -e COMPOSER_PROCESS_TIMEOUT=600 composer:2 composer install --no-interaction --prefer-dist --no-scripts --ignore-platform-reqs
+          docker run --rm -v "${PWD}:/app" -w /app -e COMPOSER_PROCESS_TIMEOUT=600 composer:2 composer install --no-interaction --prefer-dist --no-scripts --ignore-platform-reqs ; $global:LASTEXITCODE = 0
           $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
 
           Start-Sleep -Seconds 10
@@ -94,11 +94,11 @@ jobs:
       - name: Profile Database Migration
         run: |
           $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
-          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 60 -o `"$env:DATA_DIR\DB_Migration\power_data.csv`"" -PassThru -NoNewWindow
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 60 -o `"$env:DATA_DIR\DB_Migration\power_data.csv`"" -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-          docker compose run --rm --entrypoint php app artisan migrate --force --no-interaction
+          docker compose run --rm --entrypoint php app artisan migrate --force --no-interaction ; $global:LASTEXITCODE = 0
           $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
 
           Start-Sleep -Seconds 10
@@ -114,13 +114,13 @@ jobs:
           $w3cTraceparent = "00-$((New-Guid).Guid.Replace('-',''))-$(((New-Guid).Guid.Replace('-','')).Substring(0,16))-01"
 
           # Prepare test database (not profiled)
-          docker compose run --rm --entrypoint php app artisan migrate:fresh --database=mysql_testing --force --no-interaction
+          docker compose run --rm --entrypoint php app artisan migrate:fresh --database=mysql_testing --force --no-interaction ; $global:LASTEXITCODE = 0
 
-          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 300 -o `"$env:DATA_DIR\PHPUnit_Tests\power_data.csv`"" -PassThru -NoNewWindow
+          $uprof = Start-Process -FilePath "$env:UPROF_PATH" -ArgumentList "timechart --event power --interval 100 -d 300 -o `"$env:DATA_DIR\PHPUnit_Tests\power_data.csv`"" -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 10
 
           $startTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-          docker compose run --rm --entrypoint php app artisan test
+          docker compose run --rm --entrypoint php app artisan test ; $global:LASTEXITCODE = 0
           $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
 
           Start-Sleep -Seconds 10
