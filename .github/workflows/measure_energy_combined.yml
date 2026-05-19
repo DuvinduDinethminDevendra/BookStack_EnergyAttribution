@@ -227,6 +227,7 @@ jobs:
           $failedSpanCount = 0
           $scenarioStartClock = Get-Date
           $startTime = $scenarioStartClock.ToString("yyyy-MM-dd HH:mm:ss.fff")
+          $startEpochMs = [DateTimeOffset]::new($scenarioStartClock, [System.TimeZoneInfo]::Local.GetUtcOffset($scenarioStartClock)).ToUnixTimeMilliseconds()
 
           # Start ONE persistent container — all spans exec into it so Docker startup
           # overhead is paid once instead of 21 times.
@@ -329,7 +330,7 @@ jobs:
           Start-Sleep -Seconds 10
           Stop-Process -Id $uprof.Id -Force -ErrorAction SilentlyContinue
 
-          echo "${scenario}_Start,$startTime,$w3cTraceparent" > "$scenarioDir\timestamps.csv"
+          echo "${scenario}_Start,$startTime,$w3cTraceparent,$startEpochMs" > "$scenarioDir\timestamps.csv"
           echo "${scenario}_End,$endTime,$w3cTraceparent" >> "$scenarioDir\timestamps.csv"
 
           node scripts\make_pipeline_spans.js build --input "$rawSpans" --output "$spansJson" --traceparent "$w3cTraceparent" --scenario "$scenario"
@@ -689,6 +690,7 @@ jobs:
 
           FAILED_SPAN_COUNT=0
           START_TIME=$(python3 -c "from datetime import datetime; print(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])")
+          START_EPOCH_MS=$(node -e "console.log(Date.now())")
 
           run_span() {
             local name="$1"
@@ -751,7 +753,7 @@ jobs:
           sudo kill $PROF_PID 2>/dev/null || true
           wait $PROF_PID 2>/dev/null || true
 
-          echo "${SCENARIO}_Start,$START_TIME,$W3C_TRACEPARENT" > "$SCENARIO_DIR/timestamps.csv"
+          echo "${SCENARIO}_Start,$START_TIME,$W3C_TRACEPARENT,$START_EPOCH_MS" > "$SCENARIO_DIR/timestamps.csv"
           echo "${SCENARIO}_End,$END_TIME,$W3C_TRACEPARENT" >> "$SCENARIO_DIR/timestamps.csv"
 
           node scripts/make_pipeline_spans.js build --input "$RAW_SPANS" --output "$SPANS_JSON" --traceparent "$W3C_TRACEPARENT" --scenario "$SCENARIO"
