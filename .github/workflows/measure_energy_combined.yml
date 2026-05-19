@@ -204,6 +204,9 @@ jobs:
         shell: powershell
 
       # --- SCENARIO 5: PHPUNIT DIRECTORY SPANS ---
+      # Windows fix: all 21 spans run inside ONE persistent container via docker exec.
+      # Previously used 21 separate "docker compose run --rm" calls — on Windows WSL2
+      # each container startup costs 30-60s, pushing the scenario over the profiler cap.
       - name: Profile PHPUnit Directory Spans
         run: |
           $scenario = "PHPUnit_Directory_Spans"
@@ -225,6 +228,16 @@ jobs:
           $scenarioStartClock = Get-Date
           $startTime = $scenarioStartClock.ToString("yyyy-MM-dd HH:mm:ss.fff")
 
+          # Start ONE persistent container — all spans exec into it so Docker startup
+          # overhead is paid once instead of 21 times.
+          Write-Host "Starting persistent PHP runner container..."
+          $containerId = [string](docker compose run -d --entrypoint sleep app infinity | Select-Object -Last 1)
+          $containerId = $containerId.Trim()
+          if ([string]::IsNullOrWhiteSpace($containerId)) {
+            throw "Failed to start persistent PHP runner container — container ID is empty"
+          }
+          Write-Host "Runner container ID: $containerId"
+
           function Invoke-PipelineSpan {
             param(
               [Parameter(Mandatory=$true)][string]$Name,
@@ -235,8 +248,8 @@ jobs:
 
             Write-Host "Running external CI/CD span: $Name"
             $startMs = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-            $dockerArgs = @("compose", "run", "--rm", "--entrypoint", "php", "app", "artisan", "test") + $TestArgs
-            & docker @dockerArgs
+            $execArgs = @("exec", $containerId, "php", "artisan", "test") + $TestArgs
+            & docker @execArgs
             $exitCode = $LASTEXITCODE
             $endMs = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
 
@@ -308,6 +321,10 @@ jobs:
 
           $scenarioEndClock = Get-Date
           $endTime = $scenarioEndClock.ToString("yyyy-MM-dd HH:mm:ss.fff")
+
+          # Stop and remove the persistent runner
+          docker stop $containerId | Out-Null
+          docker rm  $containerId | Out-Null
 
           Start-Sleep -Seconds 10
           Stop-Process -Id $uprof.Id -Force -ErrorAction SilentlyContinue

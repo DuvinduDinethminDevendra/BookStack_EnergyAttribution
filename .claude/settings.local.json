@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cmd /c \"dir /a d:\\\\myPortfolioProject\\\\BookStack_EnergyAttribution\\\\ResearchData\\\\cpudata\\\\win_26025652648\")",
+      "PowerShell(cmd /c \"dir /a /s d:\\\\myPortfolioProject\\\\BookStack_EnergyAttribution\\\\ResearchData\\\\cpudata\\\\win_26025652648\\\\PHPUnit_Directory_Spans\")",
+      "PowerShell(cmd /c \"dir /a /s d:\\\\myPortfolioProject\\\\BookStack_EnergyAttribution\\\\ResearchData\\\\cpudata\\\\win_26025652648\\\\PHPUnit_Tests\")"
+    ]
+  }
+}
