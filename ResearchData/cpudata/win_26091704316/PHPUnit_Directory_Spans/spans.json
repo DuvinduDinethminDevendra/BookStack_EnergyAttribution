@@ -1,0 +1,317 @@
+[
+  {
+    "span_id": "3534880d1c9ed09e",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.CalibrationEmpty.1",
+    "start_time_ms": 1779231133660,
+    "end_time_ms": 1779231134113,
+    "duration_ms": 453,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "",
+      "ci.command": "php artisan test --filter __EnergyAttributionNoMatchingTest__",
+      "ci.exit_code": 1,
+      "ci.calibration": true
+    }
+  },
+  {
+    "span_id": "4568b7470d7534fc",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.CalibrationEmpty.2",
+    "start_time_ms": 1779231134228,
+    "end_time_ms": 1779231134672,
+    "duration_ms": 444,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "",
+      "ci.command": "php artisan test --filter __EnergyAttributionNoMatchingTest__",
+      "ci.exit_code": 1,
+      "ci.calibration": true
+    }
+  },
+  {
+    "span_id": "59038cb9d3f32769",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.CalibrationEmpty.3",
+    "start_time_ms": 1779231134764,
+    "end_time_ms": 1779231135214,
+    "duration_ms": 450,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "",
+      "ci.command": "php artisan test --filter __EnergyAttributionNoMatchingTest__",
+      "ci.exit_code": 1,
+      "ci.calibration": true
+    }
+  },
+  {
+    "span_id": "48478df6182a2ae1",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Root",
+    "start_time_ms": 1779231135309,
+    "end_time_ms": 1779231135703,
+    "duration_ms": 394,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/root-files",
+      "ci.command": "php artisan test tests/DebugViewTest.php tests/ErrorTest.php tests/FavouriteTest.php tests/HomepageTest.php tests/LanguageTest.php tests/PublicActionTest.php tests/SecurityHeaderTest.php tests/SessionTest.php tests/StatusTest.php tests/UrlTest.php",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "cea547dcbeed2a0c",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Activity",
+    "start_time_ms": 1779231135796,
+    "end_time_ms": 1779231136246,
+    "duration_ms": 450,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Activity",
+      "ci.command": "php artisan test tests/Activity",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "985035f3ca52407d",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Api",
+    "start_time_ms": 1779231136339,
+    "end_time_ms": 1779231136823,
+    "duration_ms": 484,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Api",
+      "ci.command": "php artisan test tests/Api",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "85e6b595c8041773",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Auth",
+    "start_time_ms": 1779231136917,
+    "end_time_ms": 1779231137365,
+    "duration_ms": 448,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Auth",
+      "ci.command": "php artisan test tests/Auth",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "6cebe4dcd70658b5",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Commands",
+    "start_time_ms": 1779231137492,
+    "end_time_ms": 1779231138032,
+    "duration_ms": 540,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Commands",
+      "ci.command": "php artisan test tests/Commands",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "ab9562cf2bc623c8",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Entity",
+    "start_time_ms": 1779231138142,
+    "end_time_ms": 1779231138603,
+    "duration_ms": 461,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Entity",
+      "ci.command": "php artisan test tests/Entity",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "3e5b4c9ca0a2e479",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Exports",
+    "start_time_ms": 1779231138698,
+    "end_time_ms": 1779231139128,
+    "duration_ms": 430,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Exports",
+      "ci.command": "php artisan test tests/Exports",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "7db5d222b101322e",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Meta",
+    "start_time_ms": 1779231139223,
+    "end_time_ms": 1779231139675,
+    "duration_ms": 452,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Meta",
+      "ci.command": "php artisan test tests/Meta",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "128d72776900fbff",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Permissions",
+    "start_time_ms": 1779231139772,
+    "end_time_ms": 1779231140314,
+    "duration_ms": 542,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Permissions",
+      "ci.command": "php artisan test tests/Permissions",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "e4527be21df6d81f",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.References",
+    "start_time_ms": 1779231140425,
+    "end_time_ms": 1779231140881,
+    "duration_ms": 456,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/References",
+      "ci.command": "php artisan test tests/References",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "8e919450e9584138",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Search",
+    "start_time_ms": 1779231140963,
+    "end_time_ms": 1779231141444,
+    "duration_ms": 481,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Search",
+      "ci.command": "php artisan test tests/Search",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "73911a68b8d1bc60",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Settings",
+    "start_time_ms": 1779231141551,
+    "end_time_ms": 1779231142038,
+    "duration_ms": 487,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Settings",
+      "ci.command": "php artisan test tests/Settings",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "fc74d283e9ed6a72",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Sorting",
+    "start_time_ms": 1779231142139,
+    "end_time_ms": 1779231142762,
+    "duration_ms": 623,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Sorting",
+      "ci.command": "php artisan test tests/Sorting",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "162997084ef11b39",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Theme",
+    "start_time_ms": 1779231142876,
+    "end_time_ms": 1779231143404,
+    "duration_ms": 528,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Theme",
+      "ci.command": "php artisan test tests/Theme",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "4588e5e3614ce40c",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Unit",
+    "start_time_ms": 1779231143520,
+    "end_time_ms": 1779231143939,
+    "duration_ms": 419,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Unit",
+      "ci.command": "php artisan test tests/Unit",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "e93e7514964f1722",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Uploads",
+    "start_time_ms": 1779231144040,
+    "end_time_ms": 1779231144479,
+    "duration_ms": 439,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Uploads",
+      "ci.command": "php artisan test tests/Uploads",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "4222a90024fa77c7",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.User",
+    "start_time_ms": 1779231144577,
+    "end_time_ms": 1779231145007,
+    "duration_ms": 430,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/User",
+      "ci.command": "php artisan test tests/User",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  },
+  {
+    "span_id": "c5bd7a45a17aa3d4",
+    "trace_id": "8d35c3720c8b4bde8d3ce4f8913be894",
+    "name": "phpunit.Util",
+    "start_time_ms": 1779231145099,
+    "end_time_ms": 1779231145590,
+    "duration_ms": 491,
+    "attributes": {
+      "ci.operation": "phpunit-directory",
+      "ci.test_path": "tests/Util",
+      "ci.command": "php artisan test tests/Util",
+      "ci.exit_code": 1,
+      "ci.calibration": false
+    }
+  }
+]

@@ -205,7 +205,7 @@ jobs:
 
       # --- SCENARIO 5: PHPUNIT DIRECTORY SPANS ---
       # Windows fix: all 21 spans run inside ONE persistent container via docker exec.
-      # Previously used 21 separate "docker compose run --rm" calls — on Windows WSL2
+      # Previously used 21 separate "docker compose run --rm" calls - on Windows WSL2
       # each container startup costs 30-60s, pushing the scenario over the profiler cap.
       - name: Profile PHPUnit Directory Spans
         run: |
@@ -229,13 +229,13 @@ jobs:
           $startTime = $scenarioStartClock.ToString("yyyy-MM-dd HH:mm:ss.fff")
           $startEpochMs = [DateTimeOffset]::new($scenarioStartClock, [System.TimeZoneInfo]::Local.GetUtcOffset($scenarioStartClock)).ToUnixTimeMilliseconds()
 
-          # Start ONE persistent container — all spans exec into it so Docker startup
+          # Start ONE persistent container - all spans exec into it so Docker startup
           # overhead is paid once instead of 21 times.
           Write-Host "Starting persistent PHP runner container..."
           $containerId = [string](docker compose run -d --entrypoint sleep app infinity | Select-Object -Last 1)
           $containerId = $containerId.Trim()
           if ([string]::IsNullOrWhiteSpace($containerId)) {
-            throw "Failed to start persistent PHP runner container — container ID is empty"
+            throw "Failed to start persistent PHP runner container: container ID is empty"
           }
           Write-Host "Runner container ID: $containerId"
 
@@ -788,7 +788,7 @@ jobs:
           fi
         shell: bash
 
-      # --- CONVERT: powermetrics → AMD-compatible timechart.csv ---
+      # --- CONVERT: powermetrics to AMD-compatible timechart.csv ---
       - name: Convert powermetrics to timechart.csv
         if: always()
         run: |

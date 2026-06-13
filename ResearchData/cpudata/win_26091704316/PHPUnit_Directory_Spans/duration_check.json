@@ -1,0 +1,1 @@
+{"scenario":"PHPUnit_Directory_Spans","usable_cap_seconds":3580,"profiler_cap_seconds":3600,"actual_duration_seconds":12.1,"calibration_repetitions":3,"span_count":21,"failed_span_count":18,"truncated":false,"task_seconds":12.1,"overrun":false}
