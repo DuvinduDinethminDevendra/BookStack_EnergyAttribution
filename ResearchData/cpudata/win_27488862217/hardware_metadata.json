@@ -1,0 +1,11 @@
+﻿{
+    "cpu_threads":  12,
+    "os_version":  "Microsoft Windows 11 Home Single Language",
+    "platform":  "amd_windows",
+    "cpu_max_mhz":  3301,
+    "captured_at":  "2026-06-14 11:34:23",
+    "docker_ver":  "Docker version 28.5.1, build e180ab8",
+    "ram_gb":  23.3,
+    "cpu_cores":  6,
+    "cpu_model":  "AMD Ryzen 5 7535HS with Radeon Graphics        "
+}
