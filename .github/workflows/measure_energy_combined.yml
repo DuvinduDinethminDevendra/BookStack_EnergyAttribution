@@ -436,12 +436,12 @@ jobs:
 
           Write-Host "Uploading to MinIO Cloud (bookstack project)..."
           $awsExe = "C:\Program Files\Amazon\AWSCLIV2\aws.exe"
-          & $awsExe s3 cp "$env:DATA_DIR\hardware_metadata.json" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/hardware_metadata.json" --endpoint-url http://100.67.86.32:9000
-          & $awsExe s3 cp "$env:DATA_DIR\Idle.zip"             "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/Idle.zip"             --endpoint-url http://100.67.86.32:9000
-          & $awsExe s3 cp "$env:DATA_DIR\Composer_Install.zip" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/Composer_Install.zip" --endpoint-url http://100.67.86.32:9000
-          & $awsExe s3 cp "$env:DATA_DIR\DB_Migration.zip"     "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/DB_Migration.zip"     --endpoint-url http://100.67.86.32:9000
-          & $awsExe s3 cp "$env:DATA_DIR\PHPUnit_Tests.zip"    "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/PHPUnit_Tests.zip"    --endpoint-url http://100.67.86.32:9000
-          & $awsExe s3 cp "$env:DATA_DIR\PHPUnit_Directory_Spans.zip" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/PHPUnit_Directory_Spans.zip" --endpoint-url http://100.67.86.32:9000
+          & $awsExe s3 cp "$env:DATA_DIR\hardware_metadata.json" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/hardware_metadata.json" --endpoint-url http://100.100.223.40:9000
+          & $awsExe s3 cp "$env:DATA_DIR\Idle.zip"             "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/Idle.zip"             --endpoint-url http://100.100.223.40:9000
+          & $awsExe s3 cp "$env:DATA_DIR\Composer_Install.zip" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/Composer_Install.zip" --endpoint-url http://100.100.223.40:9000
+          & $awsExe s3 cp "$env:DATA_DIR\DB_Migration.zip"     "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/DB_Migration.zip"     --endpoint-url http://100.100.223.40:9000
+          & $awsExe s3 cp "$env:DATA_DIR\PHPUnit_Tests.zip"    "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/PHPUnit_Tests.zip"    --endpoint-url http://100.100.223.40:9000
+          & $awsExe s3 cp "$env:DATA_DIR\PHPUnit_Directory_Spans.zip" "s3://energy-research-data/raw-telemetry/$env:PROJECT_NAME/$env:RUN_ID/PHPUnit_Directory_Spans.zip" --endpoint-url http://100.100.223.40:9000
 
           Write-Host "Cleaning up local disk..."
           Remove-Item -Path "$env:DATA_DIR" -Recurse -Force
@@ -899,7 +899,7 @@ jobs:
 
           echo "Uploading to MinIO Cloud (bookstack project)..."
           docker run --rm -v "$DATA_DIR:/data" --entrypoint sh minio/mc -c "\
-            mc alias set myminio http://100.67.86.32:9000 researcher supersecretpassword && \
+            mc alias set myminio http://100.100.223.40:9000 researcher supersecretpassword && \
             mc cp /data/hardware_metadata.json myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/hardware_metadata.json && \
             mc cp /data/Idle.zip             myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/Idle.zip && \
             mc cp /data/Composer_Install.zip myminio/energy-research-data/raw-telemetry/$PROJECT_NAME/$RUN_ID/Composer_Install.zip && \
